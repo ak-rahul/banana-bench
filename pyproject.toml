@@ -87,6 +87,7 @@ all = [
 [project.urls]
 Homepage = "https://github.com/ak-rahul/banana-bench"
 Repository = "https://github.com/ak-rahul/banana-bench"
+Documentation = "https://banana-bench.readthedocs.io/"
 "Bug Tracker" = "https://github.com/ak-rahul/banana-bench/issues"
 
 [project.scripts]
