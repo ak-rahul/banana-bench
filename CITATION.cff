@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+  - family-names: "Rahul"
+    given-names: "AK"
+title: "banana-bench: A Python Package for Optimization Algorithm Evaluation"
+version: 0.1.0
+date-released: 2026-08-16
+url: "https://github.com/ak-rahul/banana-bench"
+repository-code: "https://github.com/ak-rahul/banana-bench"
+license: MIT
+keywords:
+  - optimization
+  - benchmark
+  - test-functions
+  - python

@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Testing / Coverage
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+
+# Virtual environment
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Documentation
+docs/_build/
+
+# Type Checking / Linting
+.mypy_cache/
+.ruff_cache/
+
+# OS Metadata
+.DS_Store
+Thumbs.db
+
+# Logs and Temporary Files
+*.log
+*.tmp
+test_output*.txt
+verify_output*.txt
+failure_log*.txt
+
+# Benchmark Artifacts (Results & Plots)
+benchmark_results.csv
+benchmark_results.json
+*.png
+*.svg
+*.pdf
+*.gif
+!docs/**/*.png
+!docs/**/*.gif
