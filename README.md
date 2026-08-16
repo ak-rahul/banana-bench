@@ -5,6 +5,7 @@
 [![Downloads](https://pepy.tech/badge/banana-bench)](https://pepy.tech/project/banana-bench)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/ak-rahul/banana-bench/blob/main/LICENSE.md)
 [![Build Status](https://github.com/ak-rahul/banana-bench/actions/workflows/quality.yml/badge.svg)](https://github.com/ak-rahul/banana-bench/actions/workflows/quality.yml)
+[![Docs](https://app.readthedocs.org/projects/banana-bench/badge/?version=latest)](https://banana-bench.readthedocs.io/en/latest/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 A comprehensive collection of 55+ standard mathematical benchmark functions for testing and evaluating optimization algorithms.
@@ -15,7 +16,7 @@ A comprehensive collection of 55+ standard mathematical benchmark functions for 
 
 ## 📚 Documentation
 
-Detailed documentation is available in the `docs/` directory:
+Full documentation is published at **[banana-bench.readthedocs.io](https://banana-bench.readthedocs.io/)**, built from the sources in the `docs/` directory:
 
 - **[User Guide & Examples](docs/USER_GUIDE.md)**: Detailed tutorials on metadata, benchmarking, and utilities.
 - **[Function Reference](docs/BENCHMARK_FUNCTIONS.md)**: Complete guide to all 55+ functions with domains and global minima.
