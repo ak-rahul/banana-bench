@@ -31,8 +31,8 @@ __license__ = "MIT"
 
 import warnings
 
-from . import cec, g_suite, gradients, plotly_viz
-from .benchmarking import BenchmarkRunner, quick_benchmark
+from . import cec, g_suite, gradients, multiobjective, plotly_viz
+from .benchmarking import BenchmarkRunner, MOBenchmarkRunner, quick_benchmark
 from .functions import (
     ackley,
     beale,
@@ -222,6 +222,7 @@ __all__ = [
     "generate_grid_points",
     "calculate_distance_to_optimum",
     "BenchmarkRunner",
+    "MOBenchmarkRunner",
     "quick_benchmark",
     "BenchmarkWrapper",
     "NoisyFunction",
@@ -231,6 +232,7 @@ __all__ = [
     "plotly_viz",
     "g_suite",
     "cec",
+    "multiobjective",
 ]
 
 if __visualization_available__:

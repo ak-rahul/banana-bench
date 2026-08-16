@@ -79,11 +79,61 @@ Wrappers modify the behavior of benchmark functions. They follow the decorator p
 - `matrix`: An orthogonal rotation matrix ($n \times n$).
   - Evaluates $f(M \cdot x)$.
 
+### `MOBenchmarkRunner`
+
+The multi-objective counterpart to `BenchmarkRunner`, run against `bananabench.multiobjective.ZDT_SUITE`.
+A multi-objective algorithm returns a whole Pareto-front approximation rather than a single best
+cost, so quality is measured against the true front via IGD (always) and hypervolume (2-objective
+problems only).
+
+```python
+from bananabench import MOBenchmarkRunner
+```
+
+#### Constructor
+
+```python
+MOBenchmarkRunner(
+    algorithm: Callable,
+    algorithm_name: Optional[str] = None,
+    seed: Optional[int] = None,
+    verbose: bool = True,
+)
+```
+
+**Parameters:**
+- `algorithm`: Callable with signature `func(f, bounds, n_objectives, **kwargs) -> (X, F)`, where
+  `X` is an `(n_points, dim)` array of decision vectors and `F` is the corresponding
+  `(n_points, n_objectives)` array of objective values.
+- `algorithm_name`: String name for the report.
+- `seed`: Random seed for reproducibility.
+- `verbose`: Print progress to stdout.
+
+#### Methods
+
+**`run_suite(functions=None, dimensions=None, **kwargs)`**
+
+Run the algorithm across multiple ZDT problems.
+
+- `functions`: List of function names (e.g., `['zdt1', 'zdt2']`). If None, runs every problem in
+  `ZDT_SUITE`.
+- `dimensions`: Dictionary mapping function names to custom dimensions.
+- `**kwargs`: Additional arguments passed to your optimization algorithm.
+
+**Returns:** A list of result dictionaries, each with `igd`, `hypervolume` (2-objective problems
+only), `n_solutions`, `n_nondominated`, and `time`.
+
+**`run_single(function_name, dim=None, reference_point=None, **kwargs)`**
+
+Run the algorithm on a single ZDT problem. `reference_point` overrides the default hypervolume
+reference point (1.1x the true front's per-objective max).
+
 ### Extended Modules
 
 These modules are imported eagerly (`bananabench.cec`, `.g_suite`, `.gradients`,
-`.plotly_viz`) but only `gradients` and `g_suite` have no extra dependencies; `plotly_viz`
-degrades gracefully if `plotly` is not installed (`pip install 'banana-bench[interactive]'`).
+`.multiobjective`, `.plotly_viz`) but only `gradients`, `g_suite`, and `multiobjective` have no
+extra dependencies; `plotly_viz` degrades gracefully if `plotly` is not installed
+(`pip install 'banana-bench[interactive]'`).
 
 **`cec` — CEC-style composition framework**
 - `CECFunction(base_func, shift_vector=None, rotation_matrix=None, bias=0.0)`: wraps any
@@ -96,6 +146,22 @@ degrades gracefully if `plotly` is not installed (`pip install 'banana-bench[int
 - `g04(x)`, `g06(x)`, `g08(x)`, `g11(x)`: classic constrained benchmark problems from the 2006
   CEC Special Session on Constrained Real-Parameter Optimization. Each returns
   `(objective, inequality_violations, equality_violations)` as `(float, np.ndarray, np.ndarray)`.
+
+**`multiobjective` — ZDT multi-objective suite**
+- `zdt1(x)` ... `zdt4(x)`, `zdt6(x)`: the five real-valued ZDT problems (ZDT5 is binary-encoded and
+  not included). Each returns a 2-element objective array `[f1, f2]` (both minimized) instead of a
+  single float.
+- `ZDT_SUITE`: registry dict keyed by function name, with `function`, `n_objectives`, `default_dim`,
+  `bounds` (a `dim -> [(min, max), ...]` callable), and `properties`.
+- `get_mo_function_list()`, `get_mo_bounds(name, dim=None)`: registry accessors, analogous to
+  `get_all_functions()`/`get_bounds()` for the scalar suite.
+- `get_pareto_front(name, n_points=200)`: a sampled true Pareto front for a ZDT problem, for use as
+  the reference front in quality indicators.
+- `igd(front, reference_front)`: Inverted Generational Distance between an approximation front and
+  the true front (lower is better).
+- `hypervolume(front, reference_point)`: 2D hypervolume indicator (higher is better); raises
+  `NotImplementedError` for more than 2 objectives.
+- `non_dominated_front(points)`: filters a point set down to its Pareto-non-dominated subset.
 
 **`gradients` — finite-difference gradient estimation**
 - `approximate_gradient(func, x, method='central', epsilon=1e-8)`: estimates the gradient of a

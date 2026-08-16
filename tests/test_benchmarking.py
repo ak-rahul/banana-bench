@@ -8,7 +8,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from bananabench.benchmarking import BenchmarkRunner, quick_benchmark
+from bananabench import multiobjective as mo
+from bananabench.benchmarking import BenchmarkRunner, MOBenchmarkRunner, quick_benchmark
 
 
 def simple_optimizer(func, bounds, max_iter=50):
@@ -177,3 +178,59 @@ def test_quick_benchmark():
 def test_quick_benchmark_default_function_subset():
     results = quick_benchmark(simple_optimizer, n_runs=1, max_iter=20, show_progress=False)
     assert len(results) == 10  # documented default subset size
+
+
+def random_search_mo(func, bounds, n_objectives, n_points=30, seed=0):
+    """Cheap, deterministic-given-seed multi-objective 'optimizer' for tests."""
+    rng = np.random.default_rng(seed)
+    bounds_array = np.array(bounds)
+    lo, hi = bounds_array[:, 0], bounds_array[:, 1]
+    X = lo + rng.random((n_points, len(bounds))) * (hi - lo)
+    F = np.array([func(x) for x in X])
+    return X, F
+
+
+class TestMOBenchmarkRunnerInit:
+    def test_stores_configuration(self):
+        runner = MOBenchmarkRunner(random_search_mo, algorithm_name="TestMOAlgo", seed=1)
+        assert runner.algorithm_name == "TestMOAlgo"
+        assert runner.seed == 1
+        assert runner.results == []
+
+    def test_default_algorithm_name(self):
+        runner = MOBenchmarkRunner(random_search_mo)
+        assert runner.algorithm_name == "UnnamedMOAlgorithm"
+
+
+class TestMORunSingle:
+    def test_returns_result_dict_with_igd_and_hypervolume(self):
+        runner = MOBenchmarkRunner(random_search_mo, verbose=False, seed=1)
+        result = runner.run_single("zdt1", dim=5, n_points=20)
+        assert result["function"] == "zdt1"
+        assert result["dimension"] == 5
+        assert result["n_solutions"] == 20
+        assert result["igd"] >= 0.0
+        assert result["hypervolume"] >= 0.0
+
+    def test_uses_default_dim_when_not_specified(self):
+        runner = MOBenchmarkRunner(random_search_mo, verbose=False, seed=1)
+        result = runner.run_single("zdt1", n_points=10)
+        assert result["dimension"] == 30  # zdt1's default_dim
+
+    def test_custom_reference_point(self):
+        runner = MOBenchmarkRunner(random_search_mo, verbose=False, seed=1)
+        result = runner.run_single("zdt1", dim=5, n_points=20, reference_point=np.array([2.0, 2.0]))
+        assert result["hypervolume"] >= 0.0
+
+
+class TestMORunSuite:
+    def test_runs_every_zdt_function_by_default(self):
+        runner = MOBenchmarkRunner(random_search_mo, verbose=False, seed=1)
+        results = runner.run_suite(n_points=10)
+        assert {r["function"] for r in results} == set(mo.get_mo_function_list())
+
+    def test_runs_selected_functions_and_stores_results(self):
+        runner = MOBenchmarkRunner(random_search_mo, verbose=False, seed=1)
+        results = runner.run_suite(functions=["zdt1", "zdt2"], n_points=10)
+        assert len(results) == 2
+        assert len(runner.results) == 2
