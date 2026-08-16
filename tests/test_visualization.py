@@ -58,7 +58,13 @@ def test_module_imports_cleanly_without_matplotlib(monkeypatch):
         with pytest.raises(ImportError, match="matplotlib is required"):
             reloaded.plot_function_2d("sphere")
     finally:
-        importlib.reload(visualization)  # restore real matplotlib for later tests
+        # monkeypatch's own teardown runs *after* this function returns (including
+        # after this finally block), so sys.modules["matplotlib"] is still faked
+        # to None here. Undo it explicitly first, or this reload "restores" the
+        # module while matplotlib still looks absent, permanently corrupting
+        # MATPLOTLIB_AVAILABLE = False for every later test in the session.
+        monkeypatch.undo()
+        importlib.reload(visualization)
 
 
 class TestFunctionPlots:
