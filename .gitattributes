@@ -11,6 +11,16 @@
 *.md text eol=lf
 *.rst text eol=lf
 
+# Configuration files (CI workflows, packaging, citation metadata) -- these
+# were previously left to the `text=auto` fallback even though sibling
+# config-ish text formats below (*.json) get an explicit rule; a contributor
+# without core.autocrlf=true committing a CI workflow edit could otherwise
+# introduce CRLF into files GitHub Actions/Dependabot/Read the Docs parse.
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.cff text eol=lf
+
 # Images
 *.png binary
 *.jpg binary
@@ -26,3 +36,4 @@
 # Data files
 *.csv text eol=lf
 *.json text eol=lf
+*.txt text eol=lf

@@ -249,6 +249,57 @@ successful runs always sorts last rather than raising an error.
 
 ---
 
+## 🔀 Multi-Objective Benchmarking
+
+`BenchmarkRunner` assumes a single scalar cost, which doesn't fit multi-objective problems --
+`MOBenchmarkRunner` is the counterpart for those, run against the bundled ZDT suite
+(`zdt1`-`zdt4`, `zdt6`).
+
+A multi-objective algorithm has a different signature than a single-objective one: it takes the
+number of objectives and returns a whole population of candidate solutions, not a single best
+point.
+
+```python
+from bananabench import MOBenchmarkRunner
+import numpy as np
+
+def random_search_mo(func, bounds, n_objectives, n_points=100, seed=None):
+    # X: (n_points, dim) decision vectors: F: (n_points, n_objectives) objective values
+    rng = np.random.default_rng(seed)
+    bounds_array = np.array(bounds)
+    lo, hi = bounds_array[:, 0], bounds_array[:, 1]
+    X = lo + rng.random((n_points, len(bounds))) * (hi - lo)
+    F = np.array([func(x) for x in X])
+    return X, F
+
+runner = MOBenchmarkRunner(random_search_mo, algorithm_name='RandomSearch', seed=42)
+results = runner.run_suite(functions=['zdt1', 'zdt2'], n_points=200)
+
+for r in results:
+    print(f"{r['function']}: IGD={r['igd']:.4f}, hypervolume={r.get('hypervolume', 'N/A')}")
+```
+
+Each result dict carries `igd` (Inverted Generational Distance to the true Pareto front -- lower
+is better, 0.0 means every reference point was reached exactly), `hypervolume` (2-objective
+problems only, since every ZDT problem is bi-objective), `n_solutions`, `n_nondominated`, and
+`time`. If your algorithm raises for a given function, that function's result instead carries
+`status='exception'`, `success=False`, and `error_message` -- one failing function doesn't abort
+the rest of the suite, so you don't need to wrap `run_suite()` in your own `try`/`except`.
+
+### Working with the Pareto Front Directly
+
+For custom quality metrics, or to plot the true front against your algorithm's approximation:
+
+```python
+from bananabench.multiobjective import get_pareto_front, non_dominated_front, igd
+
+true_front = get_pareto_front('zdt1')          # (n_points, 2) array, sorted by f1
+my_front = non_dominated_front(F)              # filter your algorithm's F down to non-dominated points
+quality = igd(my_front, true_front)
+```
+
+---
+
 ## 🛠️ Utility Functions
 
 The package includes utilities to help with common optimization tasks.

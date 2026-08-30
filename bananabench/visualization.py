@@ -715,15 +715,6 @@ def plot_benchmark_summary(
     return fig
 
 
-def _check_matplotlib():
-    """Check if matplotlib is available."""
-    if not MATPLOTLIB_AVAILABLE:
-        raise ImportError(
-            "matplotlib is required for visualization. "
-            "Install with: pip install 'banana-bench[viz]'"
-        )
-
-
 def save_plot(fig, filepath, formats=["png"], dpi=300):
     """
     Save plot in multiple formats.
@@ -833,28 +824,23 @@ def plot_search_heatmap(
     cbar = plt.colorbar(im, ax=ax)
     cbar.set_label("Number of Evaluations", rotation=270, labelpad=20)
 
-    optimal_points = info.get("optimal_point")
-    if optimal_points is not None:
-        if isinstance(optimal_points[0], (list, tuple, np.ndarray)):
-            for opt in optimal_points:
-                if len(opt) == 2:
-                    ax.plot(
-                        opt[0],
-                        opt[1],
-                        "r*",
-                        markersize=20,
-                        markeredgecolor="white",
-                        markeredgewidth=1.5,
-                    )
-        elif len(optimal_points) == 2:
+    # Reuse the same optimal-point parsing plot_function_2d/plot_function_3d rely on,
+    # rather than duplicating (slightly differently, and less correctly) inline: it
+    # already handles both the "list of 2D points" and "single [x, y] point" shapes,
+    # and returns None for shapes that don't resolve to an explicit 2D coordinate
+    # (e.g. sphere's optimal_point=[0.0], a "replicate across dims" shorthand rather
+    # than a literal (x, y) pair) -- so there's nothing to plot and no legend to show.
+    optimal_points = _parse_optimal_point(info.get("optimal_point"))
+    if optimal_points:
+        for i, opt in enumerate(optimal_points):
             ax.plot(
-                optimal_points[0],
-                optimal_points[1],
+                opt[0],
+                opt[1],
                 "r*",
                 markersize=20,
                 markeredgecolor="white",
                 markeredgewidth=1.5,
-                label="Global Optimum",
+                label="Global Optimum" if i == 0 else None,
             )
 
     ax.set_xlabel("x₁", fontsize=12)
@@ -864,7 +850,8 @@ def plot_search_heatmap(
         fontsize=14,
         fontweight="bold",
     )
-    ax.legend(loc="best")
+    if optimal_points:
+        ax.legend(loc="best")
     ax.grid(True, alpha=0.3)
 
     plt.tight_layout()

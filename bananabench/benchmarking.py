@@ -461,7 +461,21 @@ class BenchmarkRunner:
         if format == "csv":
             with open(filepath, "w", newline="") as f:
                 if self.results:
-                    writer = csv.DictWriter(f, fieldnames=self.results[0].keys())
+                    # A run mixing successes and failures produces heterogeneous result
+                    # dicts (run_single's exception/bounds_error/invalid_result branches
+                    # return fewer keys than a successful run's), so fieldnames must be
+                    # the union across every result, not just the first one's keys --
+                    # DictWriter raises ValueError on any row with a key outside
+                    # fieldnames, and a fieldnames list based on a single result can't
+                    # anticipate keys introduced only by a different result's status.
+                    fieldnames: List[str] = []
+                    seen = set()
+                    for result in self.results:
+                        for key in result:
+                            if key not in seen:
+                                seen.add(key)
+                                fieldnames.append(key)
+                    writer = csv.DictWriter(f, fieldnames=fieldnames)
                     writer.writeheader()
                     writer.writerows(self.results)
         elif format == "json":
@@ -597,9 +611,25 @@ class MOBenchmarkRunner:
         if self.seed is not None:
             np.random.seed(self.seed)
 
+        # Isolate one function's failure from the rest of the suite, mirroring
+        # BenchmarkRunner.run_single -- without this, run_suite (which calls
+        # run_single once per function with no try/except of its own) would let a
+        # single bad algorithm call take down the entire batch instead of just
+        # that one function's result.
         start_time = time.time()
-        X, F = self.algorithm(func, bounds, n_objectives, **algorithm_kwargs)
-        elapsed = time.time() - start_time
+        try:
+            X, F = self.algorithm(func, bounds, n_objectives, **algorithm_kwargs)
+            elapsed = time.time() - start_time
+        except Exception as e:
+            return {
+                "function": function_name,
+                "dimension": dim,
+                "algorithm": self.algorithm_name,
+                "status": "exception",
+                "error_message": str(e),
+                "time": float(time.time() - start_time),
+                "success": False,
+            }
 
         F = np.asarray(F, dtype=float)
         front = non_dominated_front(F)
@@ -614,6 +644,8 @@ class MOBenchmarkRunner:
             "n_nondominated": int(front.shape[0]),
             "igd": igd_value,
             "time": float(elapsed),
+            "status": "success",
+            "success": True,
         }
 
         if n_objectives == 2:
@@ -670,13 +702,21 @@ class MOBenchmarkRunner:
             self.results.append(result)
 
             if self.verbose:
-                hv_str = (
-                    f"{result['hypervolume']:12.6f}" if "hypervolume" in result else f"{'N/A':>12}"
-                )
-                print(
-                    f"{result['function']:<10} | {result['dimension']:4d} | "
-                    f"{result['igd']:12.6f} | {hv_str} | {result['time']:6.2f}s"
-                )
+                if result.get("success", True) is False:
+                    print(
+                        f"{result['function']:<10} | {result['dimension']:4d} | "
+                        f"{'FAILED':>12} | {'N/A':>12} | {result['time']:6.2f}s"
+                    )
+                else:
+                    hv_str = (
+                        f"{result['hypervolume']:12.6f}"
+                        if "hypervolume" in result
+                        else f"{'N/A':>12}"
+                    )
+                    print(
+                        f"{result['function']:<10} | {result['dimension']:4d} | "
+                        f"{result['igd']:12.6f} | {hv_str} | {result['time']:6.2f}s"
+                    )
 
         if self.verbose:
             print("=" * 70)

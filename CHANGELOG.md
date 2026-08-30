@@ -63,7 +63,27 @@ functionality from that history carries forward unchanged.
   `ENGINEERING_SUITE`, alongside the existing `BENCHMARK_SUITE`/`G_SUITE`/
   `ZDT_SUITE`-derived sections.
 
+### Changed
+- `MOBenchmarkRunner.run_single` now isolates an algorithm call's exception
+  into a failure result dict (`status`, `success`, `error_message`) instead
+  of letting it propagate and abort the rest of `run_suite`'s batch, matching
+  `BenchmarkRunner.run_single`'s existing behavior. A successful result now
+  also carries `status="success"`/`success=True`, so callers can distinguish
+  the two without a `try`/`except` of their own. `run_suite`'s verbose
+  printer was updated to render a `FAILED` row for these instead of raising
+  `KeyError` on the now-absent `igd` key.
+
 ### Fixed
+- `utils.normalize_bounds` had a silent-data-loss fallback: for a bounds list
+  that didn't match any documented format (e.g. an explicit per-dimension
+  bounds list whose length doesn't match the requested `dim`), it replicated
+  just the *first* `(min, max)` pair across every dimension instead of
+  raising, discarding the rest of the input without telling the caller. This
+  was reachable in practice: `plot_function_2d('holzman1')` (any 3D+
+  function plotted without an explicit `bounds=` override) silently swapped
+  holzman1's documented `[(0.1, 100), (0, 25.6), (0, 5)]` bounds for
+  `[(0.1, 100), (0.1, 100)]`. The fallback is removed; this shape now raises
+  `ValueError` like every other unrecognized bounds format already did.
 - CLI `--list` (all four suites) and `metadata.get_function_list()` displayed
   a known minimum as `0.0000`/`0.000000` whenever fixed-point formatting
   rounded it away entirely -- the scalar suite's `gear` and the engineering
@@ -71,6 +91,32 @@ functionality from that history carries forward unchanged.
   as an exact zero. All four `--list` tables and `get_function_list()` now
   share the same fallback: switch to scientific notation whenever
   fixed-point rounding would display a nonzero value as all-zero.
+- CLI `SUITE_CHOICES` was ordered `(scalar, constrained, multiobjective,
+  engineering)` in code, so `--help` displayed that order, while every doc
+  describing `--suite` (`CLAUDE.md`, `ROADMAP.md`, `docs/API_REFERENCE.md`)
+  consistently used `{scalar,constrained,engineering,multiobjective}`.
+  Reordered the code to match the documented convention.
+- `visualization.py` had a duplicate `_check_matplotlib()` definition (the
+  second silently shadowed the first, byte-identical, so purely dead code);
+  removed, and the now-unnecessary `F811` per-file lint ignore for this
+  module dropped from `pyproject.toml`.
+- `plot_search_heatmap` emitted a spurious `UserWarning: No artists with
+  labels found...` for any function whose `optimal_point` is given in the
+  "replicate this value across dimensions" shorthand (e.g. sphere's
+  `optimal_point=[0.0]`) rather than an explicit `(x, y)` pair, because its
+  own inline optimal-point handling didn't recognize that shape (unlike
+  `plot_function_2d`/`plot_function_3d`, which already delegate to
+  `_parse_optimal_point` for exactly this reason) yet still called
+  `ax.legend()` unconditionally. Now reuses `_parse_optimal_point` and only
+  calls `ax.legend()` when there's an actual labeled artist to show.
+- `BenchmarkRunner.save_results(format="csv")` crashed with
+  `ValueError: dict contains fields not in fieldnames` whenever a run mixed
+  successes and failures, since `csv.DictWriter`'s fieldnames were taken
+  from only the first result's keys, and a failed run (bounds error,
+  exception, or invalid result) returns a different, smaller key set than a
+  successful one. Fieldnames are now the union of keys across every result,
+  in first-seen order, so mixed-outcome runs save correctly with blank
+  cells for keys a given row doesn't have.
 - `cec.CECCompositionFunction` crashed with `TypeError: unsupported operand
   type(s) for -: 'float' and 'NoneType'` when a component `CECFunction` was
   built without an explicit `shift_vector` (the common "no shift" case,

@@ -37,7 +37,7 @@ from bananabench import (
 )
 from bananabench import multiobjective as mo
 
-SUITE_CHOICES = ("scalar", "constrained", "multiobjective", "engineering")
+SUITE_CHOICES = ("scalar", "constrained", "engineering", "multiobjective")
 
 # Function docstrings contain Unicode math symbols (e.g. ≤, π). On Windows,
 # stdout/stderr default to the legacy console codepage (e.g. cp1252), which cannot

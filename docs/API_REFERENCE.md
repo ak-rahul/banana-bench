@@ -55,6 +55,10 @@ Run the benchmark suite on selected functions.
 Save benchmark results to a file.
 - `format`: 'csv' or 'json'.
 
+A run mixing successes and failures saves correctly under either format — a failed run's result
+dict has fewer keys than a successful one's, and the CSV writer accounts for that (blank cells for
+keys a given row doesn't have) rather than requiring every row to share one key set.
+
 **`get_summary_stats()`**
 
 Returns a dictionary containing aggregate statistics (mean error, success rate, etc.).
@@ -126,13 +130,16 @@ Run the algorithm across multiple ZDT problems.
 - `dimensions`: Dictionary mapping function names to custom dimensions.
 - `**kwargs`: Additional arguments passed to your optimization algorithm.
 
-**Returns:** A list of result dictionaries, each with `igd`, `hypervolume` (2-objective problems
-only), `n_solutions`, `n_nondominated`, and `time`.
+**Returns:** A list of result dictionaries. On success: `status="success"`, `success=True`, `igd`,
+`hypervolume` (2-objective problems only), `n_solutions`, `n_nondominated`, and `time`. If your
+algorithm raises for a given function, that function's dict instead carries `status="exception"`,
+`success=False`, and `error_message` — one failing function doesn't abort the rest of the suite.
 
 **`run_single(function_name, dim=None, reference_point=None, **kwargs)`**
 
 Run the algorithm on a single ZDT problem. `reference_point` overrides the default hypervolume
-reference point (1.1x the true front's per-objective max).
+reference point (1.1x the true front's per-objective max). Isolates an exception from your
+algorithm into a failure result dict rather than raising, matching `BenchmarkRunner.run_single`.
 
 ### Extended Modules
 
@@ -263,7 +270,10 @@ print(compare_algorithms([runner_a, runner_b]))
 ### Bounds & Geometry
 
 **`normalize_bounds(bounds, dim)`**
-Converts various bound formats into a standard list of `(min, max)` tuples.
+Converts various bound formats into a standard list of `(min, max)` tuples: a single `(min, max)`
+replicated across `dim` dimensions, or an explicit per-dimension list of length `dim`. Raises
+`ValueError` for anything else, rather than guessing — e.g. an explicit bounds list whose length
+doesn't match `dim`.
 
 **`check_bounds(point, bounds)`**
 Returns `True` if point is within bounds.
