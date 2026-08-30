@@ -247,6 +247,53 @@ print(compare_algorithms(runners))
 `compare_algorithms()` ranks runners by mean error (best first); an algorithm with zero
 successful runs always sorts last rather than raising an error.
 
+### Ranking Constrained Results
+
+`g_suite`/`engineering` functions return `(objective, inequality_violations, equality_violations)`
+rather than a single float, so "lower objective wins" isn't a safe ranking rule on its own -- an
+infeasible point with a great objective value is not actually a good solution.
+`bananabench.constraints` implements the standard feasibility rule (Deb, 2000) that most published
+results on these suites already rely on:
+
+```python
+from bananabench import g_suite
+from bananabench.constraints import feasibility_compare, is_feasible
+
+candidate_a = g_suite.g01(x_a)  # (objective, inequality_violations, equality_violations)
+candidate_b = g_suite.g01(x_b)
+
+print(is_feasible(candidate_a[1], candidate_a[2]))  # True/False
+
+# -1 if candidate_a is preferred, 1 if candidate_b is preferred, 0 on an exact tie
+winner = feasibility_compare(candidate_a, candidate_b)
+```
+
+Feasible solutions always beat infeasible ones; between two feasible solutions the lower objective
+wins; between two infeasible solutions the smaller total constraint violation wins.
+
+### Integration with Optuna
+
+Any `BENCHMARK_SUITE` function plugs directly into Optuna's `objective(trial) -> float` interface --
+see `examples/10_optuna_integration.py` for a full script. The short version:
+
+```python
+import optuna
+from bananabench import metadata
+from bananabench.utils import normalize_bounds
+
+info = metadata.get_function_info('rastrigin')
+bounds = normalize_bounds(info['bounds'], dim=2)
+
+def objective(trial):
+    x = [trial.suggest_float(f'x{i}', lo, hi) for i, (lo, hi) in enumerate(bounds)]
+    return info['function'](x)
+
+study = optuna.create_study(direction='minimize')
+study.optimize(objective, n_trials=200)
+```
+
+Requires Optuna (`pip install optuna`); it's not a `bananabench` dependency.
+
 ---
 
 ## 🔀 Multi-Objective Benchmarking

@@ -12,6 +12,8 @@ functionality from that history carries forward unchanged.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-30
+
 ### Added
 - `examples/09_cec_style_composition.py`: demonstrates `cec.CECFunction`/
   `CECCompositionFunction` wrapping and composing a user-defined function (not
@@ -62,6 +64,34 @@ functionality from that history carries forward unchanged.
   Design Suite" section in `docs/BENCHMARK_FUNCTIONS.md` from
   `ENGINEERING_SUITE`, alongside the existing `BENCHMARK_SUITE`/`G_SUITE`/
   `ZDT_SUITE`-derived sections.
+- CLI: a banner (bold-yellow `ansi_shadow`-font block letters) now prints on
+  bare invocation and `--help` only -- never on `--list`/`--info`/
+  `--metadata`/`--function`'s machine-consumable output paths, since those
+  are meant to be piped/parsed. List headers/footers and status text now use
+  ANSI color, gated behind both `sys.stdout.isatty()` and the `NO_COLOR`
+  environment variable convention (no-color.org), matching how `ruff`/`uv`
+  stay well-behaved in CI logs and redirected output. Zero new dependencies:
+  the banner string was generated once via `pyfiglet` as an authoring tool
+  and hardcoded, not shipped as a runtime dependency. Also added a
+  `--version` flag.
+- New `bananabench.constraints` module: `feasibility_compare(a, b, tol=1e-6)`
+  ranks two `(objective, inequality_violations, equality_violations)`
+  results -- the return shape of every `g_suite`/`engineering` function --
+  using Deb (2000)'s standard feasibility rule (feasible beats infeasible,
+  then lower objective among feasible pairs, then smaller total violation
+  among infeasible pairs). `BenchmarkRunner` assumes a scalar cost and
+  doesn't fit this tuple shape, so this closes a real gap: comparing
+  constrained-suite results previously meant hand-rolling the rule.
+  `is_feasible(...)` and `constraint_violation(...)` are the two building
+  blocks it's implemented on top of, also exported for standalone use.
+- `examples/10_optuna_integration.py`: wraps a `BENCHMARK_SUITE` function as
+  an Optuna `objective(trial) -> float` using `trial.suggest_float` per
+  dimension, built from the function's own `bounds`/metadata rather than a
+  hardcoded search space. Requires Optuna (`pip install optuna`), now
+  available as part of the `dev`/`all` extras; not a core dependency.
+- New `SECURITY.md`: private vulnerability-reporting instructions (GitHub
+  private advisories or direct email), standard practice for an actively
+  maintained open-source project.
 
 ### Changed
 - `MOBenchmarkRunner.run_single` now isolates an algorithm call's exception

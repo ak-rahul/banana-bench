@@ -143,10 +143,10 @@ algorithm into a failure result dict rather than raising, matching `BenchmarkRun
 
 ### Extended Modules
 
-These modules are imported eagerly (`bananabench.cec`, `.engineering`, `.g_suite`, `.gradients`,
-`.multiobjective`, `.plotly_viz`) but only `gradients`, `engineering`, `g_suite`, and
-`multiobjective` have no extra dependencies; `plotly_viz` degrades gracefully if `plotly` is not
-installed (`pip install 'banana-bench[interactive]'`).
+These modules are imported eagerly (`bananabench.cec`, `.constraints`, `.engineering`, `.g_suite`,
+`.gradients`, `.multiobjective`, `.plotly_viz`) but only `constraints`, `gradients`, `engineering`,
+`g_suite`, and `multiobjective` have no extra dependencies; `plotly_viz` degrades gracefully if
+`plotly` is not installed (`pip install 'banana-bench[interactive]'`).
 
 **`cec` — CEC-style composition framework**
 - `CECFunction(base_func, shift_vector=None, rotation_matrix=None, bias=0.0)`: wraps any
@@ -181,6 +181,20 @@ installed (`pip install 'banana-bench[interactive]'`).
   `dim`, `n_inequality`, `n_equality`, `known_minimum`) and for the same reason (bounds vary too
   much per-problem to fit one schema).
 - `get_engineering_function_list()`: registry accessor, analogous to `get_g_function_list()`.
+
+**`constraints` — feasibility-comparison helper for the G-suite/engineering suites**
+- `feasibility_compare(a, b, tol=1e-6) -> int`: ranks two
+  `(objective, inequality_violations, equality_violations)` results (the return shape of every
+  `g_suite`/`engineering` function) using Deb (2000)'s feasibility rule — feasible beats infeasible,
+  then lower objective among feasible pairs, then smaller total violation among infeasible pairs.
+  Returns `-1` if `a` is preferred, `1` if `b` is preferred, `0` on an exact tie. `BenchmarkRunner`
+  assumes a scalar cost, so it doesn't fit this tuple shape directly — use this to rank results from
+  the constrained suites instead of hand-rolling the comparison.
+- `is_feasible(inequality_violations, equality_violations=(), tol=1e-6) -> bool`: `True` iff every
+  inequality entry is `<= tol` and every equality entry's absolute value is `<= tol`.
+- `constraint_violation(inequality_violations, equality_violations=(), tol=1e-6) -> float`: total
+  violation magnitude — the sum of each violated inequality's positive excess plus each violated
+  equality constraint's absolute deviation from zero. `0.0` exactly when `is_feasible` is `True`.
 
 **`multiobjective` — ZDT multi-objective suite**
 - `zdt1(x)` ... `zdt4(x)`, `zdt6(x)`: the five real-valued ZDT problems (ZDT5 is binary-encoded and

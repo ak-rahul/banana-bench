@@ -31,8 +31,9 @@ __license__ = "MIT"
 
 import warnings
 
-from . import cec, engineering, g_suite, gradients, multiobjective, plotly_viz
+from . import cec, constraints, engineering, g_suite, gradients, multiobjective, plotly_viz
 from .benchmarking import BenchmarkRunner, MOBenchmarkRunner, compare_algorithms, quick_benchmark
+from .constraints import constraint_violation, feasibility_compare, is_feasible
 from .functions import (
     ackley,
     beale,
@@ -267,6 +268,10 @@ __all__ = [
     "cec",
     "multiobjective",
     "engineering",
+    "constraints",
+    "constraint_violation",
+    "is_feasible",
+    "feasibility_compare",
 ]
 
 if __visualization_available__:

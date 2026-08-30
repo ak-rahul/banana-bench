@@ -25,10 +25,12 @@ import argparse
 import csv
 import inspect
 import json
+import os
 import sys
 
 from bananabench import (
     BENCHMARK_SUITE,
+    __version__,
     engineering,
     functions,
     g_suite,
@@ -49,6 +51,47 @@ for _stream in (sys.stdout, sys.stderr):
             _stream.reconfigure(encoding="utf-8")
         except (AttributeError, ValueError):
             pass
+
+
+# --- Terminal banner & color -------------------------------------------------
+# Generated once with `pyfiglet.Figlet(font="ansi_shadow", width=200).renderText(
+# "BANANA-BENCH")` rather than hand-drawn, so the glyphs are guaranteed correctly
+# aligned -- the explicit `width=200` matters: pyfiglet's default ~80-column wrap
+# width chops this render into disconnected stacked letter-groups. "ansi_shadow"
+# has no lowercase glyphs at all (verified: it renders 'B' and 'b' identically),
+# so the banner is uppercase; the hyphen renders as a small mid-height block
+# glyph spanning only the two middle rows, which is this font's actual hyphen
+# design rather than a rendering defect.
+_BANNER = r"""
+██████╗  █████╗ ███╗   ██╗ █████╗ ███╗   ██╗ █████╗       ██████╗ ███████╗███╗   ██╗ ██████╗██╗  ██╗
+██╔══██╗██╔══██╗████╗  ██║██╔══██╗████╗  ██║██╔══██╗      ██╔══██╗██╔════╝████╗  ██║██╔════╝██║  ██║
+██████╔╝███████║██╔██╗ ██║███████║██╔██╗ ██║███████║█████╗██████╔╝█████╗  ██╔██╗ ██║██║     ███████║
+██╔══██╗██╔══██║██║╚██╗██║██╔══██║██║╚██╗██║██╔══██║╚════╝██╔══██╗██╔══╝  ██║╚██╗██║██║     ██╔══██║
+██████╔╝██║  ██║██║ ╚████║██║  ██║██║ ╚████║██║  ██║      ██████╔╝███████╗██║ ╚████║╚██████╗██║  ██║
+╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝      ╚═════╝ ╚══════╝╚═╝  ╚═══╝ ╚═════╝╚═╝  ╚═╝
+""".strip("\n")
+
+
+def _supports_color() -> bool:
+    """Only colorize when writing to a real terminal, and never when NO_COLOR is
+    set (any non-empty value -- see https://no-color.org/), matching the same two
+    checks ruff/uv use to stay well-behaved in CI logs and redirected output."""
+    if os.environ.get("NO_COLOR"):
+        return False
+    return hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
+
+
+def _style(text: str, code: str) -> str:
+    """Wrap `text` in an ANSI SGR code, or return it unchanged if colors are off."""
+    if not _supports_color():
+        return text
+    return f"\033[{code}m{text}\033[0m"
+
+
+def _print_banner() -> None:
+    print(_style(_BANNER, "1;33"))  # bold yellow -- the banana in banana-bench
+    print(_style(f"  optimization benchmark suite  ·  v{__version__}", "2"))
+    print()
 
 
 def get_available_functions():
@@ -84,6 +127,19 @@ def _format_known_min(value: float, width: int = 12, precision: int = 4) -> str:
     return f"{value:{width}.{precision}f}"
 
 
+def _print_list_header(title: str, width: int = 80) -> None:
+    """Shared banner-bar/title styling for every `--list` table (colorized when
+    supported, matching `_supports_color()`'s NO_COLOR/isatty rules)."""
+    border = _style("=" * width, "36")
+    print(border)
+    print(_style(title, "1;36"))
+    print(border)
+
+
+def _print_list_footer(width: int = 80) -> None:
+    print(_style("=" * width, "36"))
+
+
 def _format_result(suite, raw):
     """Shape a raw function return value for JSON output, per suite convention."""
     if suite in ("constrained", "engineering"):
@@ -114,9 +170,7 @@ def print_function_list(suite="scalar"):
 
 
 def _print_scalar_list():
-    print("=" * 80)
-    print("Available Benchmark Functions")
-    print("=" * 80)
+    _print_list_header("Available Benchmark Functions")
     print(f"{'Function':<25} | {'Dim':>3} | {'Known Min':>12} | {'Bounds'}")
     print("-" * 80)
 
@@ -132,7 +186,7 @@ def _print_scalar_list():
             # Fallback for functions not in metadata
             print(f"{name:<25} | {'?':>3} | {'?':>12} | ?")
 
-    print("=" * 80)
+    _print_list_footer()
     print(f"Total: {len(get_all_functions())} functions")
     print(
         "Also available: --suite constrained "
@@ -143,9 +197,7 @@ def _print_scalar_list():
 
 
 def _print_constrained_list():
-    print("=" * 80)
-    print("Available Constrained Functions (g_suite, CEC2006)")
-    print("=" * 80)
+    _print_list_header("Available Constrained Functions (g_suite, CEC2006)")
     print(f"{'Function':<10} | {'Dim':>3} | {'Ineq':>4} | {'Eq':>4} | {'Known Min':>14}")
     print("-" * 80)
 
@@ -156,14 +208,12 @@ def _print_constrained_list():
             f"{entry['n_equality']:4d} | {_format_known_min(entry['known_minimum'], width=14, precision=6)}"
         )
 
-    print("=" * 80)
+    _print_list_footer()
     print(f"Total: {len(g_suite.G_SUITE)} functions")
 
 
 def _print_engineering_list():
-    print("=" * 80)
-    print("Available Engineering Design Functions")
-    print("=" * 80)
+    _print_list_header("Available Engineering Design Functions")
     print(f"{'Function':<16} | {'Dim':>3} | {'Ineq':>4} | {'Eq':>4} | {'Known Min':>14}")
     print("-" * 80)
 
@@ -174,14 +224,12 @@ def _print_engineering_list():
             f"{entry['n_equality']:4d} | {_format_known_min(entry['known_minimum'], width=14, precision=6)}"
         )
 
-    print("=" * 80)
+    _print_list_footer()
     print(f"Total: {len(engineering.ENGINEERING_SUITE)} functions")
 
 
 def _print_multiobjective_list():
-    print("=" * 80)
-    print("Available Multi-Objective Functions (ZDT suite)")
-    print("=" * 80)
+    _print_list_header("Available Multi-Objective Functions (ZDT suite)")
     print(f"{'Function':<10} | {'Dim':>3} | {'Objectives':>10}")
     print("-" * 80)
 
@@ -189,7 +237,7 @@ def _print_multiobjective_list():
         entry = mo.ZDT_SUITE[name]
         print(f"{name:<10} | {entry['default_dim']:3d} | {entry['n_objectives']:10d}")
 
-    print("=" * 80)
+    _print_list_footer()
     print(f"Total: {len(mo.ZDT_SUITE)} functions")
 
 
@@ -481,6 +529,12 @@ def main():
     """
     Entry point for the bananabench CLI.
     """
+    # Banner only on bare invocation and --help -- never on --list/--info/--metadata/
+    # --function, whose output is machine-consumable (piped to `jq`, saved via
+    # --output, or parsed by a script) and would be corrupted by extra stdout text.
+    if len(sys.argv) == 1 or any(arg in ("-h", "--help") for arg in sys.argv[1:]):
+        _print_banner()
+
     parser = argparse.ArgumentParser(
         description="Command-line interface for evaluating optimization benchmark functions.",
         formatter_class=argparse.RawTextHelpFormatter,
@@ -500,6 +554,7 @@ def main():
         ),
     )
 
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument(
         "--list", action="store_true", help="List all available functions with metadata"
     )
@@ -573,8 +628,17 @@ def main():
 
     # From here, require --function
     if not args.function:
-        print("Error: --function is required for evaluation.", file=sys.stderr)
-        parser.print_usage(sys.stderr)
+        if len(sys.argv) == 1:
+            # Bare invocation: the banner is already on screen (printed above) --
+            # follow it with a getting-started nudge instead of a bare error.
+            print("Try one of these to get started:\n")
+            print("  banana-bench --list")
+            print("  banana-bench --info ackley")
+            print("  banana-bench --function ackley --values 0 0 0")
+            print("  banana-bench --help\n")
+        else:
+            print("Error: --function is required for evaluation.", file=sys.stderr)
+            parser.print_usage(sys.stderr)
         sys.exit(1)
 
     func_name = args.function
