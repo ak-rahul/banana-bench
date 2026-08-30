@@ -9,7 +9,12 @@ import numpy as np
 import pytest
 
 from bananabench import multiobjective as mo
-from bananabench.benchmarking import BenchmarkRunner, MOBenchmarkRunner, quick_benchmark
+from bananabench.benchmarking import (
+    BenchmarkRunner,
+    MOBenchmarkRunner,
+    compare_algorithms,
+    quick_benchmark,
+)
 
 
 def simple_optimizer(func, bounds, max_iter=50):
@@ -33,6 +38,18 @@ def simple_optimizer(func, bounds, max_iter=50):
 def zero_optimizer(func, bounds, **kwargs):
     """Deterministic optimizer that always returns the origin, for reproducibility tests."""
     return np.zeros(len(bounds)), func(np.zeros(len(bounds)))
+
+
+def far_optimizer(func, bounds, **kwargs):
+    """Deterministic optimizer that returns each bound's upper edge -- a worse result than
+    zero_optimizer for every function in the suite, for comparison-ranking tests."""
+    x = np.array([b[1] for b in bounds])
+    return x, func(x)
+
+
+def failing_optimizer(func, bounds, **kwargs):
+    """Optimizer that never succeeds, for zero-successful-runs tests."""
+    return None, None
 
 
 class TestBenchmarkRunnerInit:
@@ -166,6 +183,46 @@ class TestSummaryStats:
         runner = BenchmarkRunner(simple_optimizer, verbose=False)
         stats = runner.get_summary_stats()
         assert stats == {"n_results": 0, "n_successful": 0}
+
+
+class TestCompareAlgorithms:
+    def test_rejects_fewer_than_two_runners(self):
+        runner = BenchmarkRunner(zero_optimizer, algorithm_name="Solo", verbose=False)
+        runner.run_suite(functions=["sphere"])
+        with pytest.raises(ValueError):
+            compare_algorithms([runner])
+
+    def test_ranks_lower_error_first(self):
+        good = BenchmarkRunner(zero_optimizer, algorithm_name="Good", verbose=False)
+        good.run_suite(functions=["sphere", "ackley"])
+
+        bad = BenchmarkRunner(far_optimizer, algorithm_name="Bad", verbose=False)
+        bad.run_suite(functions=["sphere", "ackley"])
+
+        table = compare_algorithms([bad, good])  # deliberately passed worse-first
+        # Good's row must appear before Bad's row in the rendered table.
+        assert table.index("Good") < table.index("Bad")
+
+    def test_zero_successful_runs_sorts_last_and_does_not_crash(self):
+        good = BenchmarkRunner(zero_optimizer, algorithm_name="Good", verbose=False)
+        good.run_suite(functions=["sphere"])
+
+        failing = BenchmarkRunner(failing_optimizer, algorithm_name="Failing", verbose=False)
+        failing.run_suite(functions=["sphere"])
+
+        table = compare_algorithms([failing, good])
+        assert table.index("Good") < table.index("Failing")
+        assert "no successful runs" in table
+
+    def test_output_mentions_every_algorithm_name(self):
+        good = BenchmarkRunner(zero_optimizer, algorithm_name="AlphaAlgo", verbose=False)
+        good.run_suite(functions=["sphere"])
+        bad = BenchmarkRunner(far_optimizer, algorithm_name="BetaAlgo", verbose=False)
+        bad.run_suite(functions=["sphere"])
+
+        table = compare_algorithms([good, bad])
+        assert "AlphaAlgo" in table
+        assert "BetaAlgo" in table
 
 
 def test_quick_benchmark():

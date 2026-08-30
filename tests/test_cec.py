@@ -60,6 +60,20 @@ class TestCECCompositionFunction:
         result = comp(np.zeros(2))
         assert np.isclose(result, f1(np.zeros(2)), atol=1e-6)
 
+    def test_component_with_no_shift_vector_does_not_crash(self):
+        # A CECFunction built without shift_vector defaults it to None (not omitted),
+        # so CECCompositionFunction must treat that as "optimum at the origin" rather
+        # than crashing on `x - None` -- this is the common case for a component with
+        # no shift, and the framework is documented as working on any callable,
+        # CECFunction-wrapped or not (see examples/09_cec_style_composition.py).
+        f1 = CECFunction(sphere)  # shift_vector left at its default: None
+        f2 = CECFunction(sphere, shift_vector=np.array([5.0, 5.0]))
+        comp = CECCompositionFunction([f1, f2], sigma=np.array([1.0, 1.0]), biases=np.zeros(2))
+        assert np.isfinite(comp(np.array([1.0, 1.0])))
+        # At f1's (unset, i.e. origin) optimum, f1 should dominate the composition.
+        result = comp(np.zeros(2))
+        assert np.isclose(result, f1(np.zeros(2)), atol=1e-6)
+
     def test_biases_shift_composed_result(self):
         f1 = CECFunction(sphere, shift_vector=np.zeros(2))
         comp_no_bias = CECCompositionFunction([f1], sigma=np.array([1.0]), biases=np.array([0.0]))

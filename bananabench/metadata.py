@@ -781,6 +781,15 @@ def get_bounds(name, dim=None):
     return info["bounds"] * dim
 
 
+def _format_known_min(value: float, precision: int = 4) -> str:
+    """Fixed-point format a known_minimum, falling back to scientific notation
+    whenever fixed-point at `precision` decimals would display a nonzero value as
+    all-zero -- e.g. `gear`'s known minimum (~2.7e-12) rounds to "0.0000" otherwise."""
+    if value != 0 and round(value, precision) == 0:
+        return f"{value:.3e}"
+    return f"{value:.{precision}f}"
+
+
 def get_function_list():
     """
     Get formatted list of all functions with metadata.
@@ -794,7 +803,93 @@ def get_function_list():
     for name in get_all_functions():
         info = BENCHMARK_SUITE[name]
         lines.append(
-            f"{name:20s} | dim={info['default_dim']:2d} | min={info['known_minimum']:10.4f}"
+            f"{name:20s} | dim={info['default_dim']:2d} | min={_format_known_min(info['known_minimum']):>10s}"
         )
     lines.append("=" * 70)
     return "\n".join(lines)
+
+
+# Each of these axes is a pair of mutually exclusive tags in BENCHMARK_SUITE's
+# ``properties`` lists (a function carries at most one tag per axis, and may carry
+# none at all if modality/convexity is genuinely undetermined -- see CLAUDE.md's
+# note on only asserting those when derivable). ``scalable`` has no opposite tag
+# (its absence just means fixed-dimension), so it's handled separately below.
+_QUERY_AXES: Dict[str, Tuple[str, str]] = {
+    "continuous": ("continuous", "discontinuous"),
+    "differentiable": ("differentiable", "non-differentiable"),
+    "separable": ("separable", "non-separable"),
+    "unimodal": ("unimodal", "multimodal"),
+    "convex": ("convex", "non-convex"),
+}
+
+
+def query_functions(
+    separable: Optional[bool] = None,
+    scalable: Optional[bool] = None,
+    differentiable: Optional[bool] = None,
+    continuous: Optional[bool] = None,
+    unimodal: Optional[bool] = None,
+    convex: Optional[bool] = None,
+) -> List[str]:
+    """
+    Find function names matching a combination of mathematical properties.
+
+    Queries BENCHMARK_SUITE's ``properties`` tags declaratively, e.g.
+    ``query_functions(separable=False, unimodal=False, scalable=True)`` answers
+    "give me every non-separable multimodal scalable function" without hand-filtering
+    BENCHMARK_SUITE yourself. Scoped to the scalar suite only -- g_suite/engineering/
+    multiobjective functions don't carry this ``properties`` schema.
+
+    Parameters
+    ----------
+    separable : bool, optional
+        True for functions tagged 'separable', False for 'non-separable'.
+        None (default) doesn't filter on this axis.
+    scalable : bool, optional
+        True requires the 'scalable' tag; False requires its *absence* (fixed-dimension) --
+        there's no explicit 'non-scalable' tag in the schema, so absence is the signal.
+        None (default) doesn't filter on this axis.
+    differentiable : bool, optional
+        True for 'differentiable', False for 'non-differentiable'. None doesn't filter.
+    continuous : bool, optional
+        True for 'continuous', False for 'discontinuous'. None doesn't filter.
+    unimodal : bool, optional
+        True for 'unimodal', False for 'multimodal'. None doesn't filter.
+    convex : bool, optional
+        True for 'convex', False for 'non-convex'. None doesn't filter.
+
+    Returns
+    -------
+    list
+        Sorted function names satisfying every specified criterion. A criterion left
+        as None is ignored; a function with no tag at all on a *requested* axis (e.g.
+        no unimodal/multimodal tag because modality wasn't derivable) doesn't match
+        either True or False for that axis, since neither tag is actually asserted.
+
+    Examples
+    --------
+    >>> query_functions(separable=False, unimodal=False, scalable=True)
+    ['ackley', 'griewank', 'katsuura', 'lennard_jones', 'levy', 'michalewicz', 'stretched_v']
+    """
+    requested = {
+        "continuous": continuous,
+        "differentiable": differentiable,
+        "separable": separable,
+        "unimodal": unimodal,
+        "convex": convex,
+    }
+
+    matches = []
+    for name in get_all_functions():
+        props = set(BENCHMARK_SUITE[name]["properties"])
+
+        if scalable is not None and ("scalable" in props) != scalable:
+            continue
+
+        if all(
+            want is None or _QUERY_AXES[axis][0 if want else 1] in props
+            for axis, want in requested.items()
+        ):
+            matches.append(name)
+
+    return matches

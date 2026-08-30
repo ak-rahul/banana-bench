@@ -2555,6 +2555,166 @@ objective, inequality_violations, equality_violations = g_suite.g24(x)
 
 ---
 
+## Engineering Design Suite
+
+Classic mechanical/structural design benchmarks (`spring_design`, `pressure_vessel`, `welded_beam`, `gear_train`). Follows g_suite's `(objective, inequality_violations, equality_violations)` convention, so this section is generated from its own `engineering.ENGINEERING_SUITE` registry instead of `BENCHMARK_SUITE`. See `bananabench.engineering` for details and sources.
+
+Total functions: 4
+
+| Function | Dimensions | Inequality | Equality | Known Minimum |
+|----------|------------|------------|----------|----------------|
+| [spring_design](#spring_design) | 3D | 4 | 0 | 0.012665 |
+| [pressure_vessel](#pressure_vessel) | 4D | 4 | 0 | 6059.71 |
+| [welded_beam](#welded_beam) | 4D | 7 | 0 | 1.72485 |
+| [gear_train](#gear_train) | 4D | 0 | 0 | 2.7e-12 |
+
+### spring_design
+
+**Dimension:** 3
+**Constraints:** 4 inequality, 0 equality
+**Known Minimum:** 0.012665
+
+#### Description
+Tension/Compression Spring Design.
+Dimension: 3 (x1 = wire diameter d, x2 = mean coil diameter D,
+x3 = number of active coils N)
+Objective: minimize f(x) = (x3 + 2) * x2 * x1^2 (spring weight)
+Constraints: 4 inequalities (g_i(x) <= 0) -- minimum deflection, shear
+stress, surge frequency, and outer diameter limit.
+Bounds: 0.05 <= x1 <= 2.0, 0.25 <= x2 <= 1.3, 2.0 <= x3 <= 15.0.
+Optimal: x* = (0.051690, 0.356750, 11.287126), f(x*) = 0.012665.
+
+Source: Belegundu, A. (1982), "A Study of Mathematical Programming
+Methods for Structural Optimization", PhD thesis, University of Iowa.
+Formula and optimum cross-checked against Yang & Deb (2010),
+"Engineering Optimisation by Cuckoo Search", Int. J. Mathematical
+Modelling and Numerical Optimisation, 1(4), 330-343 (which itself
+reproduces the value from Cagnina, Esquivel & Coello (2008)).
+
+#### Code Example
+```python
+from bananabench import engineering
+import numpy as np
+
+x = np.ones(3)
+objective, inequality_violations, equality_violations = engineering.spring_design(x)
+```
+
+---
+
+### pressure_vessel
+
+**Dimension:** 4
+**Constraints:** 4 inequality, 0 equality
+**Known Minimum:** 6059.71
+
+#### Description
+Pressure Vessel Design.
+Dimension: 4 (x1 = shell thickness Ts, x2 = head thickness Th,
+x3 = inner radius R, x4 = length of cylindrical section L)
+Objective: minimize f(x) = 0.6224*x1*x3*x4 + 1.7781*x2*x3^2
++ 3.1661*x1^2*x4 + 19.84*x1^2*x3 (fabrication cost)
+Constraints: 4 inequalities (g_i(x) <= 0).
+Bounds: 0.0625 <= x1, x2 <= 6.1875 (integer multiples of 0.0625 in the
+original mixed-integer formulation; evaluated here as continuous),
+10.0 <= x3, x4 <= 200.0.
+Optimal: x* = (0.8125, 0.4375, 42.0984455958549, 176.6365958424394),
+f(x*) = 6059.714335048436.
+
+Source: Kannan, B. K. and Kramer, S. N. (1994), "An Augmented Lagrange
+Multiplier Based Method for Mixed Integer Discrete Continuous
+Optimization and its Applications to Mechanical Design", J. Mech. Des.,
+116, 318-320. The optimum above is not merely the best found in
+literature but a proven global optimum: Yang, Huyck, Karamanoglu &
+Khan (2013), "True Global Optimality of the Pressure Vessel Design
+Problem", Int. J. Bio-Inspired Computation, 5(6), 329-335, derive it
+analytically (Lagrange multipliers) and show it improves on the
+previous best-known value of 6059.714 (Cagnina et al. 2008).
+
+#### Code Example
+```python
+from bananabench import engineering
+import numpy as np
+
+x = np.ones(4)
+objective, inequality_violations, equality_violations = engineering.pressure_vessel(x)
+```
+
+---
+
+### welded_beam
+
+**Dimension:** 4
+**Constraints:** 7 inequality, 0 equality
+**Known Minimum:** 1.72485
+
+#### Description
+Welded Beam Design.
+Dimension: 4 (x1 = weld width w, x2 = weld length L,
+x3 = bar thickness d, x4 = bar height h)
+Objective: minimize f(x) = 1.10471*x1^2*x2 + 0.04811*x3*x4*(14.0 + x2)
+(fabrication cost)
+Constraints: 7 inequalities (g_i(x) <= 0) -- shear stress, bending
+stress, geometry, buckling load, and deflection.
+Bounds: 0.1 <= x2, x3 <= 10.0, 0.1 <= x1, x4 <= 2.0.
+Optimal: x* = (0.205729639786079, 3.470488665627977, 9.036623910357633,
+0.205729639786079), f(x*) = 1.724852308597361.
+
+Source: Ragsdell, K. and Phillips, D. (1976), "Optimal Design of a
+Class of Welded Structures Using Geometric Programming", J. Eng. Ind.,
+98, 1021-1025. Formula, auxiliary stress/deflection equations, and
+optimum cross-checked against Yang & Deb (2010), "Engineering
+Optimisation by Cuckoo Search" (whose result matches Cagnina, Esquivel
+& Coello (2008) to 12 significant figures).
+
+#### Code Example
+```python
+from bananabench import engineering
+import numpy as np
+
+x = np.ones(4)
+objective, inequality_violations, equality_violations = engineering.welded_beam(x)
+```
+
+---
+
+### gear_train
+
+**Dimension:** 4
+**Constraints:** 0 inequality, 0 equality
+**Known Minimum:** 2.7e-12
+
+#### Description
+Gear Train Design.
+Dimension: 4 (x1, x2, x3, x4 = number of teeth on each of four gears)
+Objective: minimize f(x) = (1/6.931 - (x1*x2)/(x3*x4))^2, the squared
+error between the achieved and desired (1/6.931) gear ratio.
+Constraints: none beyond the box bounds -- unlike the other three
+problems in this module, this one has no inequality/equality
+constraints in its original formulation.
+Bounds: 12 <= x1, x2, x3, x4 <= 60 (integers in the original
+mixed-integer formulation; evaluated here as continuous -- see the
+module docstring).
+Optimal: x* = (19, 16, 43, 49) (or any permutation preserving the
+{x1,x2} vs {x3,x4} product grouping), f(x*) ~= 2.7e-12.
+
+Source: Sandgren, E. (1990), "Nonlinear Integer and Discrete
+Programming in Mechanical Design Optimization", J. Mech. Des., 112(2),
+223-229. Formula and optimum cross-checked numerically: 19*16=304,
+43*49=2107, and (304/2107 - 1/6.931)^2 ~= 2.7e-12, matching the widely
+reproduced literature value.
+
+#### Code Example
+```python
+from bananabench import engineering
+import numpy as np
+
+x = np.ones(4)
+objective, inequality_violations, equality_violations = engineering.gear_train(x)
+```
+
+---
+
 ## Multi-Objective Suite (ZDT)
 
 The ZDT multi-objective suite (`zdt1`-`zdt4`, `zdt6`; `zdt5` is binary-encoded and excluded). Each function returns a 2-element `[f1, f2]` array rather than a single float, so this section is generated from its own `multiobjective.ZDT_SUITE` registry instead. See `bananabench.multiobjective` for details.

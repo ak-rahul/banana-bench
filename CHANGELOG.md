@@ -12,6 +12,75 @@ functionality from that history carries forward unchanged.
 
 ## [Unreleased]
 
+### Added
+- `examples/09_cec_style_composition.py`: demonstrates `cec.CECFunction`/
+  `CECCompositionFunction` wrapping and composing a user-defined function (not
+  part of `bananabench`), since the framework was already general enough to do
+  this but it wasn't shown anywhere. `docs/API_REFERENCE.md`'s `cec` section
+  reworded from "wraps any benchmark function" to make clear `base_func` isn't
+  restricted to the bundled suite.
+- New `benchmarking.compare_algorithms(runners)`: builds a side-by-side text comparison
+  table across multiple already-benchmarked `BenchmarkRunner` instances, ranked by mean
+  error ascending (an algorithm with zero successful runs sorts last rather than
+  raising). Replaces the loop-and-save-separate-CSVs pattern previously shown in
+  `USER_GUIDE.md`'s "Comparing Multiple Algorithms" section with one readable table.
+- New `metadata.query_functions(separable=None, scalable=None, differentiable=None,
+  continuous=None, unimodal=None, convex=None)`: finds function names by combining
+  `BENCHMARK_SUITE`'s `properties` tags declaratively (e.g.
+  `query_functions(separable=False, unimodal=False, scalable=True)` for "every
+  non-separable multimodal scalable function") instead of hand-filtering the
+  registry. Each parameter is `True`/`False`/`None`; a function carrying neither tag
+  on a requested axis (modality/convexity aren't always asserted) matches neither
+  side. `scalable=False` means the tag's absence, since there's no explicit
+  "non-scalable" tag in the schema. Scoped to the scalar suite only.
+- New `engineering` module: the classic engineering design suite --
+  `spring_design` (Belegundu 1982), `pressure_vessel` (Kannan & Kramer 1994),
+  `welded_beam` (Ragsdell & Phillips 1976), and `gear_train` (Sandgren 1990).
+  Follows `g_suite`'s `(objective, inequality_violations,
+  equality_violations)` convention; unlike the CEC2006 G-suite (one shared
+  source report), each of these four problems comes from its own original
+  paper, so every formula was cross-checked against at least two independent
+  transcriptions before landing. `pressure_vessel`'s documented optimum is a
+  proven global optimum (Yang, Huyck, Karamanoglu & Khan 2013's Lagrange
+  multiplier analysis), not merely a literature best-known value.
+  `gear_train` is a mixed-integer problem in its original formulation (four
+  gear tooth counts) with no constraint beyond its box bounds; this module
+  evaluates it at whatever real-valued `x` is passed in, consistent with
+  every other function in the package, rather than rounding internally.
+  New `engineering.ENGINEERING_SUITE` registry (`function`, `dim`,
+  `n_inequality`, `n_equality`, `known_minimum`), same shape as
+  `g_suite.G_SUITE` and for the same reason (bounds vary too much
+  per-problem to fit one schema). `get_engineering_function_list()` is the
+  accessor.
+- CLI: `--suite` gains an `engineering` choice (`spring_design`,
+  `pressure_vessel`, `welded_beam`, `gear_train`), sharing `constrained`'s
+  result shape since both follow the same convention.
+- `examples/08_engineering_design.py`: `spring_design` and `welded_beam`
+  wired into `scipy.optimize.minimize`'s SLSQP solver, in the style of
+  `05_constrained_optimization.py`.
+- `docs/generate_benchmark_functions.py` now also generates an "Engineering
+  Design Suite" section in `docs/BENCHMARK_FUNCTIONS.md` from
+  `ENGINEERING_SUITE`, alongside the existing `BENCHMARK_SUITE`/`G_SUITE`/
+  `ZDT_SUITE`-derived sections.
+
+### Fixed
+- CLI `--list` (all four suites) and `metadata.get_function_list()` displayed
+  a known minimum as `0.0000`/`0.000000` whenever fixed-point formatting
+  rounded it away entirely -- the scalar suite's `gear` and the engineering
+  suite's `gear_train` both have a known minimum around 2.7e-12, which read
+  as an exact zero. All four `--list` tables and `get_function_list()` now
+  share the same fallback: switch to scientific notation whenever
+  fixed-point rounding would display a nonzero value as all-zero.
+- `cec.CECCompositionFunction` crashed with `TypeError: unsupported operand
+  type(s) for -: 'float' and 'NoneType'` when a component `CECFunction` was
+  built without an explicit `shift_vector` (the common "no shift" case,
+  since `shift_vector` defaults to `None` rather than being omitted).
+  `getattr(func, "shift_vector", ...)`'s default only fires when an
+  attribute is *absent*, not when it's present but `None`, so the fallback
+  to "optimum at the origin" was never actually reached. Every existing test
+  happened to always pass an explicit `shift_vector`, so this went uncaught
+  until exercised directly.
+
 ## [0.2.0] - 2026-08-16
 
 ### Added

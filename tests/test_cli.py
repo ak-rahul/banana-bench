@@ -13,7 +13,7 @@ import sys
 
 import pytest
 
-from bananabench import g_suite, get_all_functions
+from bananabench import engineering, g_suite, get_all_functions
 from bananabench import multiobjective as mo
 
 
@@ -48,6 +48,19 @@ class TestList:
         result = run_cli("--list")
         for name in get_all_functions():
             assert name in result.stdout
+
+    def test_list_does_not_round_a_tiny_known_minimum_to_zero(self):
+        # `gear`'s known_minimum (~2.7e-12) rounds to "0.0000" under plain fixed-point
+        # formatting, which reads as an exact zero -- the table should fall back to
+        # scientific notation instead of losing the value entirely.
+        result = run_cli("--list")
+        for line in result.stdout.splitlines():
+            if line.startswith("gear "):
+                assert "0.0000" not in line
+                assert "e-12" in line
+                break
+        else:
+            pytest.fail("gear row not found in --list output")
 
 
 class TestInfo:
@@ -132,6 +145,7 @@ class TestConstrainedSuite:
     def test_scalar_list_mentions_other_suites(self):
         result = run_cli("--list")
         assert "constrained" in result.stdout
+        assert "engineering" in result.stdout
         assert "multiobjective" in result.stdout
 
     def test_info_shows_docstring_and_constraint_counts(self):
@@ -180,6 +194,81 @@ class TestConstrainedSuite:
 
     def test_unknown_function_fails_gracefully(self):
         result = run_cli("--function", "g99", "--suite", "constrained", "--values", "1")
+        assert result.returncode != 0
+
+
+class TestEngineeringSuite:
+    def test_list_shows_every_engineering_function(self):
+        result = run_cli("--list", "--suite", "engineering")
+        assert result.returncode == 0
+        for name in engineering.get_engineering_function_list():
+            assert name in result.stdout
+
+    def test_list_does_not_round_a_tiny_known_minimum_to_zero(self):
+        # gear_train's known_minimum (~2.7e-12) rounds to "0.000000" under plain
+        # fixed-point formatting, which reads as an exact zero -- the list should
+        # fall back to scientific notation instead of losing the value entirely.
+        result = run_cli("--list", "--suite", "engineering")
+        assert result.returncode == 0
+        for line in result.stdout.splitlines():
+            if line.startswith("gear_train"):
+                assert "0.000000" not in line
+                assert "e-12" in line
+                break
+        else:
+            pytest.fail("gear_train row not found in --list output")
+
+    def test_info_shows_docstring_and_constraint_counts(self):
+        result = run_cli("--info", "welded_beam", "--suite", "engineering")
+        assert result.returncode == 0, result.stderr
+        assert "Inequality constraints: 7" in result.stdout
+        assert "Equality constraints:   0" in result.stdout
+
+    def test_info_unknown_function_fails_gracefully(self):
+        result = run_cli("--info", "sphere", "--suite", "engineering")
+        assert result.returncode != 0
+
+    def test_metadata_outputs_valid_json(self):
+        result = run_cli("--metadata", "gear_train", "--suite", "engineering")
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data["suite"] == "engineering"
+        assert data["dimension"] == 4
+        assert data["n_inequality"] == 0
+
+    def test_evaluates_at_known_optimum(self):
+        result = run_cli(
+            "--function",
+            "gear_train",
+            "--suite",
+            "engineering",
+            "--values",
+            "19",
+            "16",
+            "43",
+            "49",
+        )
+        assert result.returncode == 0, result.stderr
+        data = json.loads(result.stdout)
+        assert data["result"]["objective"] == pytest.approx(2.7e-12, abs=1e-13)
+        assert data["result"]["inequality_violations"] == []
+        assert data["result"]["equality_violations"] == []
+
+    def test_batch_from_csv(self, tmp_path):
+        input_path = tmp_path / "points.csv"
+        with open(input_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([0.05, 0.25, 2.0])
+
+        result = run_cli(
+            "--function", "spring_design", "--suite", "engineering", "--input", str(input_path)
+        )
+        assert result.returncode == 0, result.stderr
+        data = json.loads(result.stdout)
+        assert "objective" in data["results"][0]["result"]
+
+    def test_unknown_function_fails_gracefully(self):
+        result = run_cli("--function", "nonexistent", "--suite", "engineering", "--values", "1")
         assert result.returncode != 0
 
 

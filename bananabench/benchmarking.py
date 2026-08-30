@@ -743,3 +743,72 @@ def quick_benchmark(
     )
     results = runner.run_suite(functions=function_names, **algorithm_kwargs)
     return results
+
+
+def compare_algorithms(runners: List["BenchmarkRunner"]) -> str:
+    """
+    Build a side-by-side comparison table across multiple benchmarked algorithms.
+
+    Each runner must have already had ``run_suite()`` called at least once, so
+    ``get_summary_stats()`` has results to summarize. This is the direct
+    replacement for looping over runners and saving separate result files by
+    hand (see USER_GUIDE.md's "Comparing Multiple Algorithms") -- it produces
+    one readable table instead.
+
+    Parameters
+    ----------
+    runners : list of BenchmarkRunner
+        At least two runners, each already benchmarked via ``run_suite()``.
+
+    Returns
+    -------
+    str
+        A formatted comparison table, one row per algorithm, ranked by mean
+        error ascending (best first). An algorithm with zero successful runs
+        has no error to rank by, so it always sorts last.
+
+    Raises
+    ------
+    ValueError
+        If fewer than two runners are given -- there's nothing to compare
+        with only one.
+
+    Examples
+    --------
+    >>> runner_a = BenchmarkRunner(algo_a, algorithm_name='AlgoA')
+    >>> runner_a.run_suite(functions=['sphere', 'ackley'])
+    >>> runner_b = BenchmarkRunner(algo_b, algorithm_name='AlgoB')
+    >>> runner_b.run_suite(functions=['sphere', 'ackley'])
+    >>> print(compare_algorithms([runner_a, runner_b]))
+    """
+    if len(runners) < 2:
+        raise ValueError("compare_algorithms needs at least 2 runners to compare.")
+
+    pairs = [(runner.algorithm_name, runner.get_summary_stats()) for runner in runners]
+    pairs.sort(
+        key=lambda pair: (
+            pair[1].get("n_successful", 0) == 0,
+            pair[1].get("error_mean", float("inf")),
+        )
+    )
+
+    lines = [
+        "=" * 90,
+        "Algorithm Comparison",
+        "=" * 90,
+        f"{'Algorithm':<25} | {'Success Rate':>12} | {'Error Mean':>12} | "
+        f"{'Error Median':>13} | {'Time Mean':>10}",
+        "-" * 90,
+    ]
+    for name, stats in pairs:
+        if stats.get("n_successful", 0) == 0:
+            lines.append(f"{name:<25} | {'no successful runs':^56}")
+            continue
+        lines.append(
+            f"{name:<25} | {stats['success_rate'] * 100:>11.1f}% | "
+            f"{stats['error_mean']:>12.6g} | {stats['error_median']:>13.6g} | "
+            f"{stats['time_mean']:>9.3f}s"
+        )
+    lines.append("=" * 90)
+
+    return "\n".join(lines)

@@ -5,7 +5,7 @@ This module provides the framework for building the complex, shifted,
 rotated, and composite functions typical of CEC competitions.
 """
 
-from typing import Callable, Optional
+from typing import Callable, List, Optional
 
 import numpy as np
 
@@ -49,7 +49,9 @@ class CECCompositionFunction:
     a hallmark of the CEC 2017 and 2020 suites.
     """
 
-    def __init__(self, functions: list, sigma: np.ndarray, biases: np.ndarray):
+    def __init__(
+        self, functions: List[Callable[[np.ndarray], float]], sigma: np.ndarray, biases: np.ndarray
+    ):
         self.functions = functions
         self.sigma = sigma
         self.biases = biases
@@ -60,8 +62,15 @@ class CECCompositionFunction:
 
         # Calculate raw weights based on distance to each function's optimum
         for i, func in enumerate(self.functions):
-            # Assuming func has a shift_vector property defining its optimum
-            optimum = getattr(func, "shift_vector", np.zeros_like(x))
+            # A component's optimum is its CECFunction.shift_vector, if it has one.
+            # getattr's default only fires when the attribute is absent -- but every
+            # CECFunction always sets self.shift_vector, defaulting to None rather
+            # than omitting it -- so an explicit None check is needed too, or a
+            # component built without a shift (the common case for "no-op shift")
+            # crashes below on `x - None`.
+            optimum = getattr(func, "shift_vector", None)
+            if optimum is None:
+                optimum = np.zeros_like(x)
             dist_sq = np.sum((x - optimum) ** 2)
 
             if dist_sq == 0:

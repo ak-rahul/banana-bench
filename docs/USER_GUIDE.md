@@ -36,6 +36,26 @@ bounds_5d = get_bounds('ackley', dim=5)
 | `get_function_info(name)` | Returns metadata for specific function |
 | `get_bounds(name, dim=None)` | Returns bounds for given dimension |
 | `get_function_list()` | Returns formatted string with all functions |
+| `query_functions(...)` | Returns function names matching a combination of `properties` tags |
+
+### Querying by Mathematical Properties
+
+Rather than hand-filtering `BENCHMARK_SUITE` for functions with a given combination of
+properties, `query_functions()` does it declaratively:
+
+```python
+from bananabench import query_functions
+
+# Every non-separable, multimodal, scalable function
+names = query_functions(separable=False, unimodal=False, scalable=True)
+
+# Every convex function, regardless of separability/modality
+convex_names = query_functions(convex=True)
+```
+
+Each parameter is `True` (require the tag), `False` (require its opposite tag), or `None`
+(don't filter on that axis, the default). `scalable=False` means the `scalable` tag is
+*absent* (fixed-dimension) — there's no separate "non-scalable" tag in the schema.
 
 ## 🔄 Function Wrappers
 
@@ -77,6 +97,31 @@ from scipy.spatial.transform import Rotation
 matrix = Rotation.from_euler('z', 45, degrees=True).as_matrix()
 rotated_rastrigin = RotatedFunction(rastrigin, matrix=matrix)
 ```
+
+### Composing Wrappers
+
+Since each wrapper is itself just a callable, they stack by nesting — combine noise, a
+shifted optimum, and a rotated landscape into one function:
+
+```python
+from bananabench import sphere, NoisyFunction, ShiftedFunction, RotatedFunction
+
+shift = [2.0, 3.0]
+matrix = [[0, -1], [1, 0]]  # 90-degree rotation
+
+stressed_sphere = NoisyFunction(
+    RotatedFunction(ShiftedFunction(sphere, shift=shift), matrix=matrix),
+    scale=0.05,
+)
+```
+
+**Order matters.** `RotatedFunction(ShiftedFunction(f, shift), matrix)` evaluates
+`f(matrix @ x - shift)` (shift applied in the *original* coordinate frame, then rotated),
+while `ShiftedFunction(RotatedFunction(f, matrix), shift)` evaluates `f(matrix @ (x - shift))`
+(shift applied in the *already-rotated* frame) — these are different functions in general, so
+pick the nesting order that matches what you're actually modeling. This composability isn't
+limited to the bundled suite either: since every wrapper just takes `Callable[[np.ndarray],
+float]`, it works identically on your own research function.
 
 ---
 
@@ -181,16 +226,26 @@ print(discrete_sphere([1.2, 2.8])) # Evaluates sphere([1.0, 3.0])
 ### Comparing Multiple Algorithms
 
 ```python
+from bananabench import compare_algorithms
+
 algorithms = {
     'SimulatedAnnealing': simulated_annealing,
     'GeneticAlgorithm': genetic_algorithm
 }
 
+runners = []
 for name, algo in algorithms.items():
     runner = BenchmarkRunner(algo, algorithm_name=name)
-    results = runner.run_suite()
-    runner.save_results(f'{name}_results.csv')
+    runner.run_suite()
+    runner.save_results(f'{name}_results.csv')  # still useful for raw per-run data
+    runners.append(runner)
+
+# One readable side-by-side table instead of eyeballing separate CSVs
+print(compare_algorithms(runners))
 ```
+
+`compare_algorithms()` ranks runners by mean error (best first); an algorithm with zero
+successful runs always sorts last rather than raising an error.
 
 ---
 

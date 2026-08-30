@@ -8,11 +8,13 @@ support via --jobs), function introspection, and metadata queries.
 --suite selects which registry a function name is resolved against:
 'scalar' (default, functions.py/BENCHMARK_SUITE -- unchanged from prior
 versions, so existing invocations keep working exactly as before),
-'constrained' (g_suite.G_SUITE, g01-g24), or 'multiobjective'
-(multiobjective.ZDT_SUITE, zdt1-zdt6). The three have different evaluation
-result shapes (a scalar float; an objective + inequality/equality violation
-arrays; a 2-element objective array), so evaluation results are formatted
-per-suite via `_format_result`.
+'constrained' (g_suite.G_SUITE, g01-g24), 'multiobjective'
+(multiobjective.ZDT_SUITE, zdt1-zdt6), or 'engineering'
+(engineering.ENGINEERING_SUITE, the classic design problems). 'engineering'
+shares 'constrained''s result shape (objective + inequality/equality
+violation arrays), since both follow the same convention; 'multiobjective'
+returns a 2-element objective array instead, so evaluation results are
+formatted per-suite via `_format_result`.
 
 References:
 -----------
@@ -25,10 +27,17 @@ import inspect
 import json
 import sys
 
-from bananabench import BENCHMARK_SUITE, functions, g_suite, get_all_functions, get_function_info
+from bananabench import (
+    BENCHMARK_SUITE,
+    engineering,
+    functions,
+    g_suite,
+    get_all_functions,
+    get_function_info,
+)
 from bananabench import multiobjective as mo
 
-SUITE_CHOICES = ("scalar", "constrained", "multiobjective")
+SUITE_CHOICES = ("scalar", "constrained", "multiobjective", "engineering")
 
 # Function docstrings contain Unicode math symbols (e.g. ≤, π). On Windows,
 # stdout/stderr default to the legacy console codepage (e.g. cp1252), which cannot
@@ -55,15 +64,29 @@ def _get_suite_function(suite, name):
     if suite == "constrained":
         entry = g_suite.G_SUITE.get(name)
         return entry["function"] if entry else None
+    if suite == "engineering":
+        entry = engineering.ENGINEERING_SUITE.get(name)
+        return entry["function"] if entry else None
     if suite == "multiobjective":
         entry = mo.ZDT_SUITE.get(name)
         return entry["function"] if entry else None
     return getattr(functions, name, None) if hasattr(functions, name) else None
 
 
+def _format_known_min(value: float, width: int = 12, precision: int = 4) -> str:
+    """Right-align a known_minimum to a fixed width for the CLI's `--list` tables.
+    Falls back to scientific notation whenever fixed-point formatting at `precision`
+    decimals would display a nonzero value as all-zero -- e.g. the scalar suite's
+    `gear` and the engineering suite's `gear_train`, both with known minima around
+    2.7e-12."""
+    if value != 0 and round(value, precision) == 0:
+        return f"{value:{width}.3e}"
+    return f"{value:{width}.{precision}f}"
+
+
 def _format_result(suite, raw):
     """Shape a raw function return value for JSON output, per suite convention."""
-    if suite == "constrained":
+    if suite in ("constrained", "engineering"):
         f, g, h = raw
         return {
             "objective": float(f),
@@ -82,6 +105,8 @@ def print_function_list(suite="scalar"):
     """
     if suite == "constrained":
         _print_constrained_list()
+    elif suite == "engineering":
+        _print_engineering_list()
     elif suite == "multiobjective":
         _print_multiobjective_list()
     else:
@@ -100,7 +125,8 @@ def _print_scalar_list():
             meta = BENCHMARK_SUITE[name]
             bounds_str = str(meta["bounds"][0]) if len(meta["bounds"]) == 1 else "varied"
             print(
-                f"{name:<25} | {meta['default_dim']:3d} | {meta['known_minimum']:12.4f} | {bounds_str}"
+                f"{name:<25} | {meta['default_dim']:3d} | "
+                f"{_format_known_min(meta['known_minimum'])} | {bounds_str}"
             )
         else:
             # Fallback for functions not in metadata
@@ -110,7 +136,9 @@ def _print_scalar_list():
     print(f"Total: {len(get_all_functions())} functions")
     print(
         "Also available: --suite constrained "
-        f"({len(g_suite.G_SUITE)} functions), --suite multiobjective ({len(mo.ZDT_SUITE)} functions)"
+        f"({len(g_suite.G_SUITE)} functions), --suite engineering "
+        f"({len(engineering.ENGINEERING_SUITE)} functions), --suite multiobjective "
+        f"({len(mo.ZDT_SUITE)} functions)"
     )
 
 
@@ -125,11 +153,29 @@ def _print_constrained_list():
         entry = g_suite.G_SUITE[name]
         print(
             f"{name:<10} | {entry['dim']:3d} | {entry['n_inequality']:4d} | "
-            f"{entry['n_equality']:4d} | {entry['known_minimum']:14.6f}"
+            f"{entry['n_equality']:4d} | {_format_known_min(entry['known_minimum'], width=14, precision=6)}"
         )
 
     print("=" * 80)
     print(f"Total: {len(g_suite.G_SUITE)} functions")
+
+
+def _print_engineering_list():
+    print("=" * 80)
+    print("Available Engineering Design Functions")
+    print("=" * 80)
+    print(f"{'Function':<16} | {'Dim':>3} | {'Ineq':>4} | {'Eq':>4} | {'Known Min':>14}")
+    print("-" * 80)
+
+    for name in engineering.get_engineering_function_list():
+        entry = engineering.ENGINEERING_SUITE[name]
+        print(
+            f"{name:<16} | {entry['dim']:3d} | {entry['n_inequality']:4d} | "
+            f"{entry['n_equality']:4d} | {_format_known_min(entry['known_minimum'], width=14, precision=6)}"
+        )
+
+    print("=" * 80)
+    print(f"Total: {len(engineering.ENGINEERING_SUITE)} functions")
 
 
 def _print_multiobjective_list():
@@ -154,6 +200,8 @@ def print_function_info(func_name, suite="scalar"):
     """
     if suite == "constrained":
         _print_constrained_info(func_name)
+    elif suite == "engineering":
+        _print_engineering_info(func_name)
     elif suite == "multiobjective":
         _print_multiobjective_info(func_name)
     else:
@@ -220,6 +268,33 @@ def _print_constrained_info(func_name):
     print("=" * 80)
 
 
+def _print_engineering_info(func_name):
+    if func_name not in engineering.ENGINEERING_SUITE:
+        print(
+            f"Error: Function '{func_name}' not found in the engineering suite.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    entry = engineering.ENGINEERING_SUITE[func_name]
+    doc = inspect.getdoc(entry["function"])
+
+    print("=" * 80)
+    print(f"Function: {func_name}  (engineering)")
+    print("=" * 80)
+    if doc:
+        print(f"\nDocumentation:\n{doc}\n")
+    else:
+        print("\nNo documentation available.\n")
+
+    print("Metadata:")
+    print(f"  Dimension:              {entry['dim']}")
+    print(f"  Inequality constraints: {entry['n_inequality']}")
+    print(f"  Equality constraints:   {entry['n_equality']}")
+    print(f"  Known minimum:          {entry['known_minimum']}")
+    print("=" * 80)
+
+
 def _print_multiobjective_info(func_name):
     if func_name not in mo.ZDT_SUITE:
         print(
@@ -263,6 +338,23 @@ def print_metadata(func_name, suite="scalar"):
         metadata_dict = {
             "function": func_name,
             "suite": "constrained",
+            "dimension": entry["dim"],
+            "n_inequality": entry["n_inequality"],
+            "n_equality": entry["n_equality"],
+            "known_minimum": entry["known_minimum"],
+        }
+    elif suite == "engineering":
+        if func_name not in engineering.ENGINEERING_SUITE:
+            print(
+                f"Error: No metadata available for function '{func_name}' in the "
+                "engineering suite.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        entry = engineering.ENGINEERING_SUITE[func_name]
+        metadata_dict = {
+            "function": func_name,
+            "suite": "engineering",
             "dimension": entry["dim"],
             "n_inequality": entry["n_inequality"],
             "n_equality": entry["n_equality"],
@@ -401,6 +493,8 @@ def main():
             "  banana-bench --function rastrigin --input points.csv --output results.json\n"
             "  banana-bench --list --suite constrained\n"
             "  banana-bench --function g01 --suite constrained --values 1 1 1 1 1 1 1 1 1 3 3 3 1\n"
+            "  banana-bench --list --suite engineering\n"
+            "  banana-bench --function spring_design --suite engineering --values 0.05 0.25 2.0\n"
             "  banana-bench --list --suite multiobjective\n"
             "  banana-bench --function zdt1 --suite multiobjective --values 0.5 0 0\n"
         ),
@@ -415,7 +509,9 @@ def main():
         default="scalar",
         help=(
             "Which function registry to use (default: scalar). 'constrained' resolves against "
-            "g_suite (g01-g24); 'multiobjective' resolves against the ZDT suite (zdt1-zdt4, zdt6)."
+            "g_suite (g01-g24); 'engineering' resolves against the classic design suite "
+            "(spring_design, pressure_vessel, welded_beam, gear_train); 'multiobjective' "
+            "resolves against the ZDT suite (zdt1-zdt4, zdt6)."
         ),
     )
     parser.add_argument(
