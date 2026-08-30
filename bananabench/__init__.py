@@ -1,7 +1,7 @@
 """
 banana-bench: Comprehensive Benchmark Functions for Optimization
 
-A collection of 55+ standard mathematical benchmark functions for evaluating
+A collection of 70+ standard mathematical benchmark functions for evaluating
 optimization algorithms.
 
 References
@@ -31,8 +31,8 @@ __license__ = "MIT"
 
 import warnings
 
-from . import cec, g_suite, gradients, plotly_viz
-from .benchmarking import BenchmarkRunner, quick_benchmark
+from . import cec, g_suite, gradients, multiobjective, plotly_viz
+from .benchmarking import BenchmarkRunner, MOBenchmarkRunner, quick_benchmark
 from .functions import (
     ackley,
     beale,
@@ -55,6 +55,9 @@ from .functions import (
     gear,
     goldstein_price,
     griewank,
+    hansen,
+    hartman3,
+    hartman6,
     himmelblau,
     holzman1,
     holzman2,
@@ -71,6 +74,13 @@ from .functions import (
     mccormick,
     michalewicz,
     multimod,
+    neumaier_perm,
+    neumaier_perm0,
+    neumaier_powersum,
+    neumaier_trid,
+    paviani,
+    plateau,
+    powell,
     rastrigin,
     rastrigin2,
     rosenbrock,
@@ -83,6 +93,11 @@ from .functions import (
     schwefel2_22,
     schwefel2_26,
     schwefel3_2,
+    shekel2,
+    shekel4_5,
+    shekel4_7,
+    shekel4_10,
+    shubert,
     sphere,
     sphere2,
     step,
@@ -206,6 +221,21 @@ __all__ = [
     "lennard_jones",
     "fraudenstein_roth",
     "freudenstein_roth",
+    "hansen",
+    "hartman3",
+    "hartman6",
+    "neumaier_perm",
+    "neumaier_perm0",
+    "neumaier_powersum",
+    "neumaier_trid",
+    "paviani",
+    "plateau",
+    "powell",
+    "shekel2",
+    "shekel4_5",
+    "shekel4_7",
+    "shekel4_10",
+    "shubert",
     "BENCHMARK_SUITE",
     "get_all_functions",
     "get_function_info",
@@ -222,6 +252,7 @@ __all__ = [
     "generate_grid_points",
     "calculate_distance_to_optimum",
     "BenchmarkRunner",
+    "MOBenchmarkRunner",
     "quick_benchmark",
     "BenchmarkWrapper",
     "NoisyFunction",
@@ -231,6 +262,7 @@ __all__ = [
     "plotly_viz",
     "g_suite",
     "cec",
+    "multiobjective",
 ]
 
 if __visualization_available__:

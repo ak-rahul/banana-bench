@@ -64,6 +64,9 @@ __all__ = [
     "gear",
     "goldstein_price",
     "griewank",
+    "hansen",
+    "hartman3",
+    "hartman6",
     "himmelblau",
     "holzman1",
     "holzman2",
@@ -80,6 +83,13 @@ __all__ = [
     "mccormick",
     "michalewicz",
     "multimod",
+    "neumaier_perm",
+    "neumaier_perm0",
+    "neumaier_powersum",
+    "neumaier_trid",
+    "paviani",
+    "plateau",
+    "powell",
     "rastrigin",
     "rastrigin2",
     "rosenbrock",
@@ -92,6 +102,11 @@ __all__ = [
     "schwefel2_22",
     "schwefel2_26",
     "schwefel3_2",
+    "shekel2",
+    "shekel4_5",
+    "shekel4_7",
+    "shekel4_10",
+    "shubert",
     "sphere",
     "sphere2",
     "step",
@@ -413,6 +428,82 @@ def griewank(x: np.ndarray) -> float:
     return float(sum_sq - prod_cos + 1)
 
 
+def hansen(x: np.ndarray) -> float:
+    """
+    Hansen function.
+    Domain: |x_i| ≤ 10.
+    Dimension: 2.
+    Global minimum: ≈-176.541793 (several equivalent global optima exist).
+    """
+    x = np.asarray(x, dtype=float)
+    _check_dim(x, 2, "hansen")
+    i = np.arange(5)
+    f1 = np.sum((i + 1) * np.cos(i * x[0] + i + 1))
+    f2 = np.sum((i + 1) * np.cos((i + 2) * x[1] + i + 1))
+    return float(f1 * f2)
+
+
+def hartman3(x: np.ndarray) -> float:
+    """
+    Hartman function (3-dimensional).
+    Domain: 0 ≤ x_i ≤ 1.
+    Dimension: 3 (fixed by the coefficient tables below).
+    Global minimum: ≈-3.862782 at x ≈ (0.114614, 0.555649, 0.852547).
+    """
+    x = np.asarray(x, dtype=float)
+    _check_dim(x, 3, "hartman3")
+    a = np.array([[3, 10, 30], [0.1, 10, 35], [3, 10, 30], [0.1, 10, 35]])
+    c = np.array([1.0, 1.2, 3.0, 3.2])
+    p = np.array(
+        [
+            [0.3689, 0.1170, 0.2673],
+            [0.4699, 0.4387, 0.7470],
+            [0.1091, 0.8732, 0.5547],
+            [0.03815, 0.5743, 0.8828],
+        ]
+    )
+    total = 0.0
+    for i in range(4):
+        total += c[i] * np.exp(-np.sum(a[i] * (x - p[i]) ** 2))
+    return float(-total)
+
+
+def hartman6(x: np.ndarray) -> float:
+    """
+    Hartman function (6-dimensional).
+    Domain: 0 ≤ x_i ≤ 1.
+    Dimension: 6 (fixed by the coefficient tables below).
+    Global minimum: ≈-3.322368 at x ≈ (0.20169, 0.150011, 0.476874, 0.275332, 0.311652, 0.6573).
+    """
+    x = np.asarray(x, dtype=float)
+    _check_dim(x, 6, "hartman6")
+    a = np.array(
+        [
+            [10, 3, 17, 3.5, 1.7, 8.0],
+            [0.05, 10, 17, 0.1, 8, 14],
+            [3, 3.5, 1.7, 10, 17, 8],
+            [17, 8, 0.05, 10, 0.1, 14],
+        ]
+    )
+    c = np.array([1.0, 1.2, 3.0, 3.2])
+    # p[2][1] = 0.1451 (not the 0.1415 that circulates in some transcriptions of this
+    # table): 0.1451 is what both Adorio (2005)'s own prose description of this function
+    # and independent literature (e.g. the Hartmann-6 entry at sfu.ca/~ssurjano) agree on,
+    # and it's the value that actually reaches the documented -3.322368 optimum.
+    p = np.array(
+        [
+            [0.1312, 0.1696, 0.5569, 0.0124, 0.8283, 0.5886],
+            [0.2329, 0.4135, 0.8307, 0.3736, 0.1004, 0.9991],
+            [0.2348, 0.1451, 0.3522, 0.2883, 0.3047, 0.6650],
+            [0.4047, 0.8828, 0.8732, 0.5743, 0.1091, 0.0381],
+        ]
+    )
+    total = 0.0
+    for i in range(4):
+        total += c[i] * np.exp(-np.sum(a[i] * (x - p[i]) ** 2))
+    return float(-total)
+
+
 def himmelblau(x: np.ndarray) -> float:
     """
     Himmelblau function.
@@ -660,6 +751,112 @@ def multimod(x: np.ndarray) -> float:
     return float(np.sum(np.abs(x)) * np.prod(np.abs(x)))
 
 
+def neumaier_perm(x: np.ndarray) -> float:
+    """
+    Neumaier's Perm function, PERM(n, beta) with beta=50.
+    Domain: -n ≤ x_i ≤ n.
+    Dimension: n.
+    Global minimum: 0 at x_i = i+1 (1-indexed).
+    """
+    x = np.asarray(x, dtype=float)
+    n = x.size
+    beta = 50.0
+    i = np.arange(1, n + 1, dtype=float)
+    total = 0.0
+    for k in range(1, n + 1):
+        inner = np.sum((i**k + beta) * ((x / i) ** k - 1))
+        total += inner**2
+    return float(total)
+
+
+def neumaier_perm0(x: np.ndarray) -> float:
+    """
+    Neumaier's Perm0 function, PERM0(n, beta) with beta=10.
+    Domain: -1 ≤ x_i ≤ 1.
+    Dimension: n.
+    Global minimum: 0 at x_i = 1/(i+1) (1-indexed).
+    """
+    x = np.asarray(x, dtype=float)
+    n = x.size
+    beta = 10.0
+    i = np.arange(1, n + 1, dtype=float)
+    total = 0.0
+    for k in range(1, n + 1):
+        inner = np.sum((i + beta) * (x**k - (1.0 / i) ** k))
+        total += inner**2
+    return float(total)
+
+
+def neumaier_powersum(x: np.ndarray) -> float:
+    """
+    Neumaier's Power sum function.
+    Domain: 0 ≤ x_i ≤ 4.
+    Dimension: 4 (fixed by the target power sums below).
+    Global minimum: 0 at x = (1, 2, 2, 3).
+    """
+    x = np.asarray(x, dtype=float)
+    _check_dim(x, 4, "neumaier_powersum")
+    b = np.array([8.0, 18.0, 44.0, 114.0])
+    total = 0.0
+    for k in range(4):
+        total += (np.sum(x ** (k + 1)) - b[k]) ** 2
+    return float(total)
+
+
+def neumaier_trid(x: np.ndarray) -> float:
+    """
+    Neumaier's Trid function.
+    Domain: -n² ≤ x_i ≤ n².
+    Dimension: n.
+    Global minimum: -n(n+4)(n-1)/6 at x_i = i(n+1-i) (1-indexed).
+    """
+    x = np.asarray(x, dtype=float)
+    return float(np.sum((x - 1) ** 2) - np.sum(x[1:] * x[:-1]))
+
+
+def paviani(x: np.ndarray) -> float:
+    """
+    Paviani function.
+    Domain: 2.0001 ≤ x_i ≤ 9.9999.
+    Dimension: 10 (fixed).
+    Global minimum: ≈-45.778470 at x_i ≈ 9.350266.
+    """
+    x = np.asarray(x, dtype=float)
+    _check_dim(x, 10, "paviani")
+    a = np.log(x - 2.0)
+    b = np.log(10.0 - x)
+    return float(np.sum(a**2 + b**2) - np.prod(x) ** 0.2)
+
+
+def plateau(x: np.ndarray) -> float:
+    """
+    Plateau function.
+    Domain: |x_i| ≤ 5.12.
+    Dimension: 5 (fixed).
+    Global minimum: 30, attained on the whole plateau x_i in [0, 1), not just at x = 0.
+    """
+    x = np.asarray(x, dtype=float)
+    _check_dim(x, 5, "plateau")
+    return float(30.0 + np.sum(np.floor(x)))
+
+
+def powell(x: np.ndarray) -> float:
+    """
+    Powell function.
+    Domain: -4 ≤ x_i ≤ 5.
+    Dimension: n, divisible by 4.
+    Global minimum: 0 at x = 0.
+    """
+    x = np.asarray(x, dtype=float)
+    if x.size % 4 != 0:
+        raise ValueError(f"powell requires a dimension divisible by 4, got {x.size}D.")
+    total = 0.0
+    for b in range(x.size // 4):
+        y0, y1, y2, y3 = x[4 * b : 4 * b + 4]
+        total += (y0 + 10 * y1) ** 2 + 5 * (y2 - y3) ** 2 + (y1 - 2 * y2) ** 4 + 10 * (y0 - y3) ** 4
+    return float(total)
+
+
 def rastrigin(x: np.ndarray) -> float:
     """
     Rastrigin function.
@@ -806,6 +1003,98 @@ def schwefel3_2(x: np.ndarray) -> float:
     """
     x = np.asarray(x, dtype=float)
     return (x[0] - x[1]) ** 2 + (1 - x[1]) ** 2
+
+
+def shekel2(x: np.ndarray) -> float:
+    """
+    Shekel's foxholes function (2-dimensional; also known as De Jong's function 5).
+    Domain: |x_i| ≤ 65.536.
+    Dimension: 2 (fixed).
+    Global minimum: ≈0.998004 at x ≈ (-31.97833, -31.97833).
+    """
+    x = np.asarray(x, dtype=float)
+    _check_dim(x, 2, "shekel2")
+    a0 = np.array([-32, -16, 0, 16, 32] * 5, dtype=float)
+    a1 = np.repeat([-32.0, -16.0, 0.0, 16.0, 32.0], 5)
+    j = np.arange(1, 26, dtype=float)
+    s = np.sum(1.0 / (j + (x[0] - a0) ** 6 + (x[1] - a1) ** 6))
+    return float(1.0 / (1.0 / 500.0 + s))
+
+
+_SHEKEL4_A = np.array(
+    [
+        [4, 4, 4, 4],
+        [1, 1, 1, 1],
+        [8, 8, 8, 8],
+        [6, 6, 6, 6],
+        [3, 7, 3, 7],
+        [2, 9, 2, 9],
+        [5, 5, 3, 3],
+        [8, 1, 8, 1],
+        [6, 2, 6, 2],
+        [7, 3.6, 7, 3.6],
+    ]
+)
+_SHEKEL4_C = np.array([0.1, 0.2, 0.2, 0.4, 0.4, 0.6, 0.3, 0.7, 0.5, 0.5])
+
+
+def _shekel4(x: np.ndarray, m: int) -> float:
+    total = 0.0
+    for i in range(m):
+        total -= 1.0 / (np.sum((x - _SHEKEL4_A[i]) ** 2) + _SHEKEL4_C[i])
+    return float(total)
+
+
+def shekel4_5(x: np.ndarray) -> float:
+    """
+    Shekel's 4-dimensional foxholes function (m=5 local optima).
+    Domain: 0 ≤ x_i ≤ 10.
+    Dimension: 4 (fixed).
+    Global minimum: ≈-10.1532 at x ≈ (4.00004, 4.00013, 4.00004, 4.00013).
+    """
+    x = np.asarray(x, dtype=float)
+    _check_dim(x, 4, "shekel4_5")
+    return _shekel4(x, 5)
+
+
+def shekel4_7(x: np.ndarray) -> float:
+    """
+    Shekel's 4-dimensional foxholes function (m=7 local optima).
+    Domain: 0 ≤ x_i ≤ 10.
+    Dimension: 4 (fixed).
+    Global minimum: ≈-10.4029 at x ≈ (4.00057, 4.00069, 3.99949, 3.99961).
+    """
+    x = np.asarray(x, dtype=float)
+    _check_dim(x, 4, "shekel4_7")
+    return _shekel4(x, 7)
+
+
+def shekel4_10(x: np.ndarray) -> float:
+    """
+    Shekel's 4-dimensional foxholes function (m=10 local optima).
+    Domain: 0 ≤ x_i ≤ 10.
+    Dimension: 4 (fixed).
+    Global minimum: ≈-10.5364 at x ≈ (4.00075, 4.00059, 3.99966, 3.99951).
+    """
+    x = np.asarray(x, dtype=float)
+    _check_dim(x, 4, "shekel4_10")
+    return _shekel4(x, 10)
+
+
+def shubert(x: np.ndarray) -> float:
+    """
+    Shubert function.
+    Domain: |x_i| ≤ 10.
+    Dimension: n.
+    Global minimum: ≈-24.062499 at x ≈ (5.791794, 5.791794) for n=2 (many equivalent global
+    optima exist -- 400 for n=2).
+    """
+    x = np.asarray(x, dtype=float)
+    j = np.arange(5)
+    total = 0.0
+    for xi in x:
+        total += np.sum((j + 1) * np.sin((j + 2) * xi + j + 1))
+    return float(-total)
 
 
 def sphere(x: np.ndarray) -> float:

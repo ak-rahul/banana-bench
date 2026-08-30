@@ -26,6 +26,14 @@ except ImportError:
     TQDM_AVAILABLE = False
 
 from .metadata import BENCHMARK_SUITE, get_all_functions, get_function_info
+from .multiobjective import (
+    ZDT_SUITE,
+    get_mo_function_list,
+    get_pareto_front,
+    hypervolume,
+    igd,
+    non_dominated_front,
+)
 from .utils import calculate_distance_to_optimum, normalize_bounds
 
 
@@ -496,6 +504,184 @@ class BenchmarkRunner:
             "time_mean": float(np.mean(times)),
             "time_median": float(np.median(times)),
         }
+
+
+class MOBenchmarkRunner:
+    """
+    Systematic benchmarking tool for multi-objective optimization algorithms,
+    run against ``bananabench.multiobjective.ZDT_SUITE``.
+
+    Unlike ``BenchmarkRunner`` (which assumes a scalar cost and a single
+    ``known_minimum``), a multi-objective algorithm returns a whole
+    approximation of the Pareto front, so quality is measured against the
+    true front via IGD (always) and hypervolume (2-objective problems only
+    -- see ``multiobjective.hypervolume``).
+
+    Parameters
+    ----------
+    algorithm : callable
+        Multi-objective optimizer with signature
+        ``algorithm(func, bounds, n_objectives, **kwargs) -> (X, F)``, where
+        ``X`` is an ``(n_points, dim)`` array of decision vectors and ``F``
+        is the corresponding ``(n_points, n_objectives)`` array of objective
+        values.
+    algorithm_name : str, optional
+        Name of the algorithm for reporting.
+    seed : int, optional
+        Random seed for reproducibility.
+    verbose : bool, default=True
+        Whether to print progress information.
+
+    Attributes
+    ----------
+    results : list
+        List of result dictionaries for each run.
+
+    Examples
+    --------
+    >>> def my_mo_algo(func, bounds, n_objectives, pop_size=100):
+    ...     # Your multi-objective optimization code
+    ...     return X, F
+    >>>
+    >>> runner = MOBenchmarkRunner(my_mo_algo, algorithm_name='MyMOAlgo')
+    >>> results = runner.run_suite(functions=['zdt1', 'zdt2'])
+    """
+
+    def __init__(
+        self,
+        algorithm: Callable,
+        algorithm_name: Optional[str] = None,
+        seed: Optional[int] = None,
+        verbose: bool = True,
+    ):
+        self.algorithm = algorithm
+        self.algorithm_name = algorithm_name or "UnnamedMOAlgorithm"
+        self.seed = seed
+        self.verbose = verbose
+        self.results: List[Dict[str, Any]] = []
+
+    def run_single(
+        self,
+        function_name: str,
+        dim: Optional[int] = None,
+        reference_point: Optional[np.ndarray] = None,
+        **algorithm_kwargs,
+    ) -> Dict[str, Any]:
+        """
+        Run the algorithm on a single ZDT problem.
+
+        Parameters
+        ----------
+        function_name : str
+            Name of a function in ``multiobjective.ZDT_SUITE``.
+        dim : int, optional
+            Dimension to use (if None, uses the problem's default_dim).
+        reference_point : ndarray, optional
+            Reference point for the hypervolume indicator (if None, uses
+            1.1x the true front's per-objective max, the common ZDT convention).
+        **algorithm_kwargs
+            Additional arguments passed to the algorithm.
+
+        Returns
+        -------
+        dict
+            Result dictionary with IGD, hypervolume (if 2-objective), and timing.
+        """
+        info = ZDT_SUITE[function_name]
+        func = info["function"]
+        n_objectives = info["n_objectives"]
+        dim = dim or info["default_dim"]
+        bounds_fn = info["bounds"]
+        bounds = bounds_fn(dim)
+
+        if self.seed is not None:
+            np.random.seed(self.seed)
+
+        start_time = time.time()
+        X, F = self.algorithm(func, bounds, n_objectives, **algorithm_kwargs)
+        elapsed = time.time() - start_time
+
+        F = np.asarray(F, dtype=float)
+        front = non_dominated_front(F)
+        true_front = get_pareto_front(function_name)
+        igd_value = igd(front, true_front)
+
+        result: Dict[str, Any] = {
+            "function": function_name,
+            "dimension": dim,
+            "algorithm": self.algorithm_name,
+            "n_solutions": int(F.shape[0]),
+            "n_nondominated": int(front.shape[0]),
+            "igd": igd_value,
+            "time": float(elapsed),
+        }
+
+        if n_objectives == 2:
+            ref = (
+                np.asarray(reference_point, dtype=float)
+                if reference_point is not None
+                else np.max(true_front, axis=0) * 1.1
+            )
+            result["hypervolume"] = hypervolume(front, ref)
+
+        return result
+
+    def run_suite(
+        self,
+        functions: Optional[List[str]] = None,
+        dimensions: Optional[Dict[str, int]] = None,
+        **algorithm_kwargs,
+    ) -> List[Dict[str, Any]]:
+        """
+        Run the algorithm across multiple ZDT problems.
+
+        Parameters
+        ----------
+        functions : list of str, optional
+            Function names to test (if None, uses every function in ZDT_SUITE).
+        dimensions : dict, optional
+            Custom dimensions per function {function_name: dim}.
+        **algorithm_kwargs
+            Additional arguments passed to the algorithm.
+
+        Returns
+        -------
+        list of dict
+            List of result dictionaries.
+        """
+        if functions is None:
+            functions = get_mo_function_list()
+        dimensions = dimensions or {}
+
+        if self.verbose:
+            print("=" * 70)
+            print(f"MULTI-OBJECTIVE BENCHMARK: {self.algorithm_name}")
+            print("=" * 70)
+            print(
+                f"{'Function':<10} | {'Dim':>4} | {'IGD':>12} | {'Hypervolume':>12} | {'Time':>7}"
+            )
+            print("-" * 70)
+
+        all_results = []
+        for function_name in functions:
+            dim = dimensions.get(function_name, None)
+            result = self.run_single(function_name, dim=dim, **algorithm_kwargs)
+            all_results.append(result)
+            self.results.append(result)
+
+            if self.verbose:
+                hv_str = (
+                    f"{result['hypervolume']:12.6f}" if "hypervolume" in result else f"{'N/A':>12}"
+                )
+                print(
+                    f"{result['function']:<10} | {result['dimension']:4d} | "
+                    f"{result['igd']:12.6f} | {hv_str} | {result['time']:6.2f}s"
+                )
+
+        if self.verbose:
+            print("=" * 70)
+
+        return all_results
 
 
 def quick_benchmark(

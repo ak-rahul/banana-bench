@@ -6,7 +6,7 @@ This document provides a detailed reference for all benchmark functions availabl
 
 ## Summary
 
-Total functions: 59
+Total functions: 74
 
 | Function | Dimensions | Domain | Global Minimum |
 |----------|------------|--------|----------------|
@@ -29,6 +29,9 @@ Total functions: 59
 | [gear](#gear) | 4D | [12, 60]^n | 2.7e-12 |
 | [goldstein_price](#goldstein_price) | 2D | [-2, 2]^n | 3 |
 | [griewank](#griewank) | 10D | [-600, 600]^n | 0 |
+| [hansen](#hansen) | 2D | [-10, 10]^n | -176.542 |
+| [hartman3](#hartman3) | 3D | [0, 1]^n | -3.86278 |
+| [hartman6](#hartman6) | 6D | [0, 1]^n | -3.32237 |
 | [himmelblau](#himmelblau) | 2D | [-6, 6]^n | 0 |
 | [holzman1](#holzman1) | 3D | Varies | 0 |
 | [holzman2](#holzman2) | 3D | [-10, 10]^n | 0 |
@@ -45,6 +48,13 @@ Total functions: 59
 | [mccormick](#mccormick) | 2D | Varies | -1.9133 |
 | [michalewicz](#michalewicz) | 10D | [0, 3.14159]^n | -9.66 |
 | [multimod](#multimod) | 10D | [-10, 10]^n | 0 |
+| [neumaier_perm](#neumaier_perm) | 4D | [-4, 4]^n | 0 |
+| [neumaier_perm0](#neumaier_perm0) | 4D | [-1, 1]^n | 0 |
+| [neumaier_powersum](#neumaier_powersum) | 4D | [0, 4]^n | 0 |
+| [neumaier_trid](#neumaier_trid) | 6D | [-36, 36]^n | -50 |
+| [paviani](#paviani) | 10D | [2.0001, 9.9999]^n | -45.7785 |
+| [plateau](#plateau) | 5D | [-5.12, 5.12]^n | 30 |
+| [powell](#powell) | 4D | [-4, 5]^n | 0 |
 | [rastrigin](#rastrigin) | 10D | [-5.12, 5.12]^n | 0 |
 | [rastrigin2](#rastrigin2) | 2D | [-5.12, 5.12]^n | -2 |
 | [rosenbrock](#rosenbrock) | 10D | [-10, 10]^n | 0 |
@@ -57,6 +67,11 @@ Total functions: 59
 | [schwefel2_22](#schwefel2_22) | 10D | [-10, 10]^n | 0 |
 | [schwefel2_26](#schwefel2_26) | 10D | [-500, 500]^n | -4189.83 |
 | [schwefel3_2](#schwefel3_2) | 10D | [-10, 10]^n | 0 |
+| [shekel2](#shekel2) | 2D | [-65.536, 65.536]^n | 0.998004 |
+| [shekel4_10](#shekel4_10) | 4D | [0, 10]^n | -10.5364 |
+| [shekel4_5](#shekel4_5) | 4D | [0, 10]^n | -10.1532 |
+| [shekel4_7](#shekel4_7) | 4D | [0, 10]^n | -10.4029 |
+| [shubert](#shubert) | 2D | [-10, 10]^n | -24.0625 |
 | [sphere](#sphere) | 10D | [-100, 100]^n | 0 |
 | [sphere2](#sphere2) | 10D | [-100, 100]^n | 0 |
 | [step](#step) | 10D | [-100, 100]^n | 2.5 |
@@ -546,6 +561,81 @@ print(f'result: {result}')
 
 ---
 
+### hansen
+
+**Default Dimension:** 2
+**Known Minimum:** -176.542
+**Optimal Point:** `x = [-7.58989, -7.70831]`
+
+#### Description
+Hansen function.
+Domain: |x_i| ≤ 10.
+Dimension: 2.
+Global minimum: ≈-176.541793 (several equivalent global optima exist).
+
+#### Code Example
+```python
+from bananabench import hansen
+import numpy as np
+
+# Run hansen
+x = np.zeros(2)
+result = hansen(x)
+print(f'result: {result}')
+```
+
+---
+
+### hartman3
+
+**Default Dimension:** 3
+**Known Minimum:** -3.86278
+**Optimal Point:** `x = [0.114614, 0.555649, 0.852547]`
+
+#### Description
+Hartman function (3-dimensional).
+Domain: 0 ≤ x_i ≤ 1.
+Dimension: 3 (fixed by the coefficient tables below).
+Global minimum: ≈-3.862782 at x ≈ (0.114614, 0.555649, 0.852547).
+
+#### Code Example
+```python
+from bananabench import hartman3
+import numpy as np
+
+# Run hartman3
+x = np.zeros(3)
+result = hartman3(x)
+print(f'result: {result}')
+```
+
+---
+
+### hartman6
+
+**Default Dimension:** 6
+**Known Minimum:** -3.32237
+**Optimal Point:** `x = [0.20169, 0.150011, 0.476874, 0.275332, 0.311652, 0.6573]`
+
+#### Description
+Hartman function (6-dimensional).
+Domain: 0 ≤ x_i ≤ 1.
+Dimension: 6 (fixed by the coefficient tables below).
+Global minimum: ≈-3.322368 at x ≈ (0.20169, 0.150011, 0.476874, 0.275332, 0.311652, 0.6573).
+
+#### Code Example
+```python
+from bananabench import hartman6
+import numpy as np
+
+# Run hartman6
+x = np.zeros(6)
+result = hartman6(x)
+print(f'result: {result}')
+```
+
+---
+
 ### himmelblau
 
 **Default Dimension:** 2
@@ -940,6 +1030,181 @@ print(f'result: {result}')
 
 ---
 
+### neumaier_perm
+
+**Default Dimension:** 4
+**Known Minimum:** 0
+**Optimal Point:** `x = [1, 2, 3, 4]`
+
+#### Description
+Neumaier's Perm function, PERM(n, beta) with beta=50.
+Domain: -n ≤ x_i ≤ n.
+Dimension: n.
+Global minimum: 0 at x_i = i+1 (1-indexed).
+
+#### Code Example
+```python
+from bananabench import neumaier_perm
+import numpy as np
+
+# Run neumaier_perm
+x = np.zeros(4)
+result = neumaier_perm(x)
+print(f'result: {result}')
+```
+
+---
+
+### neumaier_perm0
+
+**Default Dimension:** 4
+**Known Minimum:** 0
+**Optimal Point:** `x = [1, 0.5, 0.333333, 0.25]`
+
+#### Description
+Neumaier's Perm0 function, PERM0(n, beta) with beta=10.
+Domain: -1 ≤ x_i ≤ 1.
+Dimension: n.
+Global minimum: 0 at x_i = 1/(i+1) (1-indexed).
+
+#### Code Example
+```python
+from bananabench import neumaier_perm0
+import numpy as np
+
+# Run neumaier_perm0
+x = np.zeros(4)
+result = neumaier_perm0(x)
+print(f'result: {result}')
+```
+
+---
+
+### neumaier_powersum
+
+**Default Dimension:** 4
+**Known Minimum:** 0
+**Optimal Point:** `x = [1, 2, 2, 3]`
+
+#### Description
+Neumaier's Power sum function.
+Domain: 0 ≤ x_i ≤ 4.
+Dimension: 4 (fixed by the target power sums below).
+Global minimum: 0 at x = (1, 2, 2, 3).
+
+#### Code Example
+```python
+from bananabench import neumaier_powersum
+import numpy as np
+
+# Run neumaier_powersum
+x = np.zeros(4)
+result = neumaier_powersum(x)
+print(f'result: {result}')
+```
+
+---
+
+### neumaier_trid
+
+**Default Dimension:** 6
+**Known Minimum:** -50
+**Optimal Point:** `x = [6, 10, 12, 12, 10, 6]`
+
+#### Description
+Neumaier's Trid function.
+Domain: -n² ≤ x_i ≤ n².
+Dimension: n.
+Global minimum: -n(n+4)(n-1)/6 at x_i = i(n+1-i) (1-indexed).
+
+#### Code Example
+```python
+from bananabench import neumaier_trid
+import numpy as np
+
+# Run neumaier_trid
+x = np.zeros(6)
+result = neumaier_trid(x)
+print(f'result: {result}')
+```
+
+---
+
+### paviani
+
+**Default Dimension:** 10
+**Known Minimum:** -45.7785
+**Optimal Point:** `x = [9.35027, 9.35027, 9.35027, 9.35027, 9.35027, 9.35027, 9.35027, 9.35027, 9.35027, 9.35027]`
+
+#### Description
+Paviani function.
+Domain: 2.0001 ≤ x_i ≤ 9.9999.
+Dimension: 10 (fixed).
+Global minimum: ≈-45.778470 at x_i ≈ 9.350266.
+
+#### Code Example
+```python
+from bananabench import paviani
+import numpy as np
+
+# Run paviani
+x = np.zeros(10)
+result = paviani(x)
+print(f'result: {result}')
+```
+
+---
+
+### plateau
+
+**Default Dimension:** 5
+**Known Minimum:** 30
+**Optimal Point:** `x = [0, 0, 0, 0, 0]`
+
+#### Description
+Plateau function.
+Domain: |x_i| ≤ 5.12.
+Dimension: 5 (fixed).
+Global minimum: 30, attained on the whole plateau x_i in [0, 1), not just at x = 0.
+
+#### Code Example
+```python
+from bananabench import plateau
+import numpy as np
+
+# Run plateau
+x = np.zeros(5)
+result = plateau(x)
+print(f'result: {result}')
+```
+
+---
+
+### powell
+
+**Default Dimension:** 4
+**Known Minimum:** 0
+**Optimal Point:** `x = [0]`
+
+#### Description
+Powell function.
+Domain: -4 ≤ x_i ≤ 5.
+Dimension: n, divisible by 4.
+Global minimum: 0 at x = 0.
+
+#### Code Example
+```python
+from bananabench import powell
+import numpy as np
+
+# Run powell
+x = np.zeros(4)
+result = powell(x)
+print(f'result: {result}')
+```
+
+---
+
 ### rastrigin
 
 **Default Dimension:** 10
@@ -1238,6 +1503,132 @@ import numpy as np
 # Run schwefel3_2
 x = np.zeros(10)
 result = schwefel3_2(x)
+print(f'result: {result}')
+```
+
+---
+
+### shekel2
+
+**Default Dimension:** 2
+**Known Minimum:** 0.998004
+**Optimal Point:** `x = [-31.9783, -31.9783]`
+
+#### Description
+Shekel's foxholes function (2-dimensional; also known as De Jong's function 5).
+Domain: |x_i| ≤ 65.536.
+Dimension: 2 (fixed).
+Global minimum: ≈0.998004 at x ≈ (-31.97833, -31.97833).
+
+#### Code Example
+```python
+from bananabench import shekel2
+import numpy as np
+
+# Run shekel2
+x = np.zeros(2)
+result = shekel2(x)
+print(f'result: {result}')
+```
+
+---
+
+### shekel4_10
+
+**Default Dimension:** 4
+**Known Minimum:** -10.5364
+**Optimal Point:** `x = [4.00075, 4.00059, 3.99966, 3.99951]`
+
+#### Description
+Shekel's 4-dimensional foxholes function (m=10 local optima).
+Domain: 0 ≤ x_i ≤ 10.
+Dimension: 4 (fixed).
+Global minimum: ≈-10.5364 at x ≈ (4.00075, 4.00059, 3.99966, 3.99951).
+
+#### Code Example
+```python
+from bananabench import shekel4_10
+import numpy as np
+
+# Run shekel4_10
+x = np.zeros(4)
+result = shekel4_10(x)
+print(f'result: {result}')
+```
+
+---
+
+### shekel4_5
+
+**Default Dimension:** 4
+**Known Minimum:** -10.1532
+**Optimal Point:** `x = [4.00004, 4.00013, 4.00004, 4.00013]`
+
+#### Description
+Shekel's 4-dimensional foxholes function (m=5 local optima).
+Domain: 0 ≤ x_i ≤ 10.
+Dimension: 4 (fixed).
+Global minimum: ≈-10.1532 at x ≈ (4.00004, 4.00013, 4.00004, 4.00013).
+
+#### Code Example
+```python
+from bananabench import shekel4_5
+import numpy as np
+
+# Run shekel4_5
+x = np.zeros(4)
+result = shekel4_5(x)
+print(f'result: {result}')
+```
+
+---
+
+### shekel4_7
+
+**Default Dimension:** 4
+**Known Minimum:** -10.4029
+**Optimal Point:** `x = [4.00057, 4.00069, 3.99949, 3.99961]`
+
+#### Description
+Shekel's 4-dimensional foxholes function (m=7 local optima).
+Domain: 0 ≤ x_i ≤ 10.
+Dimension: 4 (fixed).
+Global minimum: ≈-10.4029 at x ≈ (4.00057, 4.00069, 3.99949, 3.99961).
+
+#### Code Example
+```python
+from bananabench import shekel4_7
+import numpy as np
+
+# Run shekel4_7
+x = np.zeros(4)
+result = shekel4_7(x)
+print(f'result: {result}')
+```
+
+---
+
+### shubert
+
+**Default Dimension:** 2
+**Known Minimum:** -24.0625
+**Optimal Point:** `x = [5.79179, 5.79179]`
+
+#### Description
+Shubert function.
+Domain: |x_i| ≤ 10.
+Dimension: n.
+Global minimum: ≈-24.062499 at x ≈ (5.791794, 5.791794) for n=2 (many equivalent global
+optima exist -- 400 for n=2).
+
+#### Code Example
+```python
+from bananabench import shubert
+import numpy as np
+
+# Run shubert
+x = np.zeros(2)
+result = shubert(x)
 print(f'result: {result}')
 ```
 
@@ -1544,6 +1935,746 @@ import numpy as np
 x = np.zeros(2)
 result = zimmerman(x)
 print(f'result: {result}')
+```
+
+---
+
+## Constrained Suite (g_suite)
+
+The classic CEC2006 constrained G-suite (`g01`-`g24`). Not part of `BENCHMARK_SUITE` -- each function returns `(objective, inequality_violations, equality_violations)` rather than a single float, so this section is generated from its own `g_suite.G_SUITE` registry instead. See `bananabench.g_suite` for details.
+
+Total functions: 24
+
+| Function | Dimensions | Inequality | Equality | Known Minimum |
+|----------|------------|------------|----------|----------------|
+| [g01](#g01) | 13D | 9 | 0 | -15 |
+| [g02](#g02) | 20D | 2 | 0 | -0.803619 |
+| [g03](#g03) | 10D | 0 | 1 | -1.0005 |
+| [g04](#g04) | 5D | 6 | 0 | -30665.5 |
+| [g05](#g05) | 4D | 2 | 3 | 5126.5 |
+| [g06](#g06) | 2D | 2 | 0 | -6961.81 |
+| [g07](#g07) | 10D | 8 | 0 | 24.3062 |
+| [g08](#g08) | 2D | 2 | 0 | -0.095825 |
+| [g09](#g09) | 7D | 4 | 0 | 680.63 |
+| [g10](#g10) | 8D | 6 | 0 | 7049.25 |
+| [g11](#g11) | 2D | 0 | 1 | 0.7499 |
+| [g12](#g12) | 3D | 1 | 0 | -1 |
+| [g13](#g13) | 5D | 0 | 3 | 0.0539415 |
+| [g14](#g14) | 10D | 0 | 3 | -47.7649 |
+| [g15](#g15) | 3D | 0 | 2 | 961.715 |
+| [g16](#g16) | 5D | 38 | 0 | -1.90516 |
+| [g17](#g17) | 6D | 0 | 4 | 8853.54 |
+| [g18](#g18) | 9D | 13 | 0 | -0.866025 |
+| [g19](#g19) | 15D | 5 | 0 | 32.6556 |
+| [g20](#g20) | 24D | 6 | 14 | 0.204979 |
+| [g21](#g21) | 7D | 1 | 5 | 193.725 |
+| [g22](#g22) | 22D | 1 | 19 | 236.431 |
+| [g23](#g23) | 9D | 2 | 4 | -400.055 |
+| [g24](#g24) | 2D | 2 | 0 | -5.50801 |
+
+### g01
+
+**Dimension:** 13
+**Constraints:** 9 inequality, 0 equality
+**Known Minimum:** -15
+
+#### Description
+G01 Constrained Benchmark Function.
+Dimension: 13
+Objective: minimize f(x)
+Constraints: 9 inequalities (g_i(x) <= 0)
+Optimal: x* = (1,1,1,1,1,1,1,1,1,3,3,3,1), f(x*) = -15
+
+#### Code Example
+```python
+from bananabench import g_suite
+import numpy as np
+
+x = np.ones(13)
+objective, inequality_violations, equality_violations = g_suite.g01(x)
+```
+
+---
+
+### g02
+
+**Dimension:** 20
+**Constraints:** 2 inequality, 0 equality
+**Known Minimum:** -0.803619
+
+#### Description
+G02 Constrained Benchmark Function.
+Dimension: 20
+Objective: minimize f(x)
+Constraints: 2 inequalities (g_i(x) <= 0)
+Optimal: f(x*) = -0.803619104
+
+#### Code Example
+```python
+from bananabench import g_suite
+import numpy as np
+
+x = np.ones(20)
+objective, inequality_violations, equality_violations = g_suite.g02(x)
+```
+
+---
+
+### g03
+
+**Dimension:** 10
+**Constraints:** 0 inequality, 1 equality
+**Known Minimum:** -1.0005
+
+#### Description
+G03 Constrained Benchmark Function.
+Dimension: 10
+Objective: minimize f(x)
+Constraints: 1 equality (h(x) == 0)
+Optimal: f(x*) = -1.000500100
+
+#### Code Example
+```python
+from bananabench import g_suite
+import numpy as np
+
+x = np.ones(10)
+objective, inequality_violations, equality_violations = g_suite.g03(x)
+```
+
+---
+
+### g04
+
+**Dimension:** 5
+**Constraints:** 6 inequality, 0 equality
+**Known Minimum:** -30665.5
+
+#### Description
+G04 Constrained Benchmark Function.
+Dimension: 5
+Objective: minimize f(x)
+Constraints: 6 inequalities (g_i(x) <= 0)
+Optimal: f(x*) = -30665.539
+
+#### Code Example
+```python
+from bananabench import g_suite
+import numpy as np
+
+x = np.ones(5)
+objective, inequality_violations, equality_violations = g_suite.g04(x)
+```
+
+---
+
+### g05
+
+**Dimension:** 4
+**Constraints:** 2 inequality, 3 equality
+**Known Minimum:** 5126.5
+
+#### Description
+G05 Constrained Benchmark Function.
+Dimension: 4
+Objective: minimize f(x)
+Constraints: 2 inequalities + 3 equalities
+Optimal: f(x*) = 5126.496714007
+
+#### Code Example
+```python
+from bananabench import g_suite
+import numpy as np
+
+x = np.ones(4)
+objective, inequality_violations, equality_violations = g_suite.g05(x)
+```
+
+---
+
+### g06
+
+**Dimension:** 2
+**Constraints:** 2 inequality, 0 equality
+**Known Minimum:** -6961.81
+
+#### Description
+G06 Constrained Benchmark Function.
+Dimension: 2
+Objective: minimize f(x)
+Constraints: 2 inequalities (g_i(x) <= 0)
+Optimal: f(x*) = -6961.81388
+
+#### Code Example
+```python
+from bananabench import g_suite
+import numpy as np
+
+x = np.ones(2)
+objective, inequality_violations, equality_violations = g_suite.g06(x)
+```
+
+---
+
+### g07
+
+**Dimension:** 10
+**Constraints:** 8 inequality, 0 equality
+**Known Minimum:** 24.3062
+
+#### Description
+G07 Constrained Benchmark Function.
+Dimension: 10
+Objective: minimize f(x)
+Constraints: 8 inequalities
+Optimal: f(x*) = 24.306209068
+
+#### Code Example
+```python
+from bananabench import g_suite
+import numpy as np
+
+x = np.ones(10)
+objective, inequality_violations, equality_violations = g_suite.g07(x)
+```
+
+---
+
+### g08
+
+**Dimension:** 2
+**Constraints:** 2 inequality, 0 equality
+**Known Minimum:** -0.095825
+
+#### Description
+G08 Constrained Benchmark Function.
+Dimension: 2
+Objective: minimize f(x)
+Constraints: 2 inequalities (g_i(x) <= 0)
+Optimal: f(x*) = -0.095825
+
+#### Code Example
+```python
+from bananabench import g_suite
+import numpy as np
+
+x = np.ones(2)
+objective, inequality_violations, equality_violations = g_suite.g08(x)
+```
+
+---
+
+### g09
+
+**Dimension:** 7
+**Constraints:** 4 inequality, 0 equality
+**Known Minimum:** 680.63
+
+#### Description
+G09 Constrained Benchmark Function.
+Dimension: 7
+Objective: minimize f(x)
+Constraints: 4 inequalities
+Optimal: f(x*) = 680.630057374
+
+#### Code Example
+```python
+from bananabench import g_suite
+import numpy as np
+
+x = np.ones(7)
+objective, inequality_violations, equality_violations = g_suite.g09(x)
+```
+
+---
+
+### g10
+
+**Dimension:** 8
+**Constraints:** 6 inequality, 0 equality
+**Known Minimum:** 7049.25
+
+#### Description
+G10 Constrained Benchmark Function.
+Dimension: 8
+Objective: minimize f(x)
+Constraints: 6 inequalities
+Optimal: f(x*) = 7049.248020529
+
+#### Code Example
+```python
+from bananabench import g_suite
+import numpy as np
+
+x = np.ones(8)
+objective, inequality_violations, equality_violations = g_suite.g10(x)
+```
+
+---
+
+### g11
+
+**Dimension:** 2
+**Constraints:** 0 inequality, 1 equality
+**Known Minimum:** 0.7499
+
+#### Description
+G11 Constrained Benchmark Function.
+Dimension: 2
+Objective: minimize f(x)
+Constraints: 1 equality (h_i(x) == 0)
+Optimal: f(x*) = 0.7499
+
+#### Code Example
+```python
+from bananabench import g_suite
+import numpy as np
+
+x = np.ones(2)
+objective, inequality_violations, equality_violations = g_suite.g11(x)
+```
+
+---
+
+### g12
+
+**Dimension:** 3
+**Constraints:** 1 inequality, 0 equality
+**Known Minimum:** -1
+
+#### Description
+G12 Constrained Benchmark Function.
+Dimension: 3
+Objective: minimize f(x)
+Constraints: 1 inequality (g(x) <= 0), evaluated as the best of 729 disjoint
+spherical feasible regions centered on the integer grid {1,...,9}^3.
+Optimal: x* = (5, 5, 5), f(x*) = -1.0
+
+#### Code Example
+```python
+from bananabench import g_suite
+import numpy as np
+
+x = np.ones(3)
+objective, inequality_violations, equality_violations = g_suite.g12(x)
+```
+
+---
+
+### g13
+
+**Dimension:** 5
+**Constraints:** 0 inequality, 3 equality
+**Known Minimum:** 0.0539415
+
+#### Description
+G13 Constrained Benchmark Function.
+Dimension: 5
+Objective: minimize f(x)
+Constraints: 3 equalities
+Optimal: f(x*) = 0.053941514
+
+#### Code Example
+```python
+from bananabench import g_suite
+import numpy as np
+
+x = np.ones(5)
+objective, inequality_violations, equality_violations = g_suite.g13(x)
+```
+
+---
+
+### g14
+
+**Dimension:** 10
+**Constraints:** 0 inequality, 3 equality
+**Known Minimum:** -47.7649
+
+#### Description
+G14 Constrained Benchmark Function.
+Dimension: 10
+Objective: minimize f(x)
+Constraints: 3 equalities
+Optimal: f(x*) = -47.764888459
+
+#### Code Example
+```python
+from bananabench import g_suite
+import numpy as np
+
+x = np.ones(10)
+objective, inequality_violations, equality_violations = g_suite.g14(x)
+```
+
+---
+
+### g15
+
+**Dimension:** 3
+**Constraints:** 0 inequality, 2 equality
+**Known Minimum:** 961.715
+
+#### Description
+G15 Constrained Benchmark Function.
+Dimension: 3
+Objective: minimize f(x)
+Constraints: 2 equalities
+Optimal: f(x*) = 961.715022290
+
+#### Code Example
+```python
+from bananabench import g_suite
+import numpy as np
+
+x = np.ones(3)
+objective, inequality_violations, equality_violations = g_suite.g15(x)
+```
+
+---
+
+### g16
+
+**Dimension:** 5
+**Constraints:** 38 inequality, 0 equality
+**Known Minimum:** -1.90516
+
+#### Description
+G16 Constrained Benchmark Function.
+Dimension: 5
+Objective: minimize f(x)
+Constraints: 38 inequalities
+Optimal: f(x*) = -1.905155259
+
+Uses the intermediate-variable names (y1..y17, c1..c17) from the source
+report directly, 1-indexed with index 0 unused, so the code can be
+checked line-by-line against the paper.
+
+#### Code Example
+```python
+from bananabench import g_suite
+import numpy as np
+
+x = np.ones(5)
+objective, inequality_violations, equality_violations = g_suite.g16(x)
+```
+
+---
+
+### g17
+
+**Dimension:** 6
+**Constraints:** 0 inequality, 4 equality
+**Known Minimum:** 8853.54
+
+#### Description
+G17 Constrained Benchmark Function.
+Dimension: 6
+Objective: minimize f(x)
+Constraints: 4 equalities
+Optimal: f(x*) = 8853.539674806
+
+#### Code Example
+```python
+from bananabench import g_suite
+import numpy as np
+
+x = np.ones(6)
+objective, inequality_violations, equality_violations = g_suite.g17(x)
+```
+
+---
+
+### g18
+
+**Dimension:** 9
+**Constraints:** 13 inequality, 0 equality
+**Known Minimum:** -0.866025
+
+#### Description
+G18 Constrained Benchmark Function.
+Dimension: 9
+Objective: minimize f(x)
+Constraints: 13 inequalities
+Optimal: f(x*) = -0.866025404
+
+#### Code Example
+```python
+from bananabench import g_suite
+import numpy as np
+
+x = np.ones(9)
+objective, inequality_violations, equality_violations = g_suite.g18(x)
+```
+
+---
+
+### g19
+
+**Dimension:** 15
+**Constraints:** 5 inequality, 0 equality
+**Known Minimum:** 32.6556
+
+#### Description
+G19 Constrained Benchmark Function.
+Dimension: 15
+Objective: minimize f(x)
+Constraints: 5 inequalities
+Optimal: f(x*) = 32.655592950
+
+#### Code Example
+```python
+from bananabench import g_suite
+import numpy as np
+
+x = np.ones(15)
+objective, inequality_violations, equality_violations = g_suite.g19(x)
+```
+
+---
+
+### g20
+
+**Dimension:** 24
+**Constraints:** 6 inequality, 14 equality
+**Known Minimum:** 0.204979
+
+#### Description
+G20 Constrained Benchmark Function.
+Dimension: 24
+Objective: minimize f(x)
+Constraints: 6 inequalities + 14 equalities
+Optimal: f(x*) ~= 0.204979400 -- per the source technical report, this
+"best known" point is itself slightly infeasible and no fully feasible
+solution has ever been verified for g20. Treat as indicative only.
+
+#### Code Example
+```python
+from bananabench import g_suite
+import numpy as np
+
+x = np.ones(24)
+objective, inequality_violations, equality_violations = g_suite.g20(x)
+```
+
+---
+
+### g21
+
+**Dimension:** 7
+**Constraints:** 1 inequality, 5 equality
+**Known Minimum:** 193.725
+
+#### Description
+G21 Constrained Benchmark Function.
+Dimension: 7
+Objective: minimize f(x)
+Constraints: 1 inequality + 5 equalities
+Optimal: f(x*) = 193.724510070
+
+#### Code Example
+```python
+from bananabench import g_suite
+import numpy as np
+
+x = np.ones(7)
+objective, inequality_violations, equality_violations = g_suite.g21(x)
+```
+
+---
+
+### g22
+
+**Dimension:** 22
+**Constraints:** 1 inequality, 19 equality
+**Known Minimum:** 236.431
+
+#### Description
+G22 Constrained Benchmark Function.
+Dimension: 22
+Objective: minimize f(x)
+Constraints: 1 inequality + 19 equalities
+Optimal: f(x*) = 236.430975504
+
+#### Code Example
+```python
+from bananabench import g_suite
+import numpy as np
+
+x = np.ones(22)
+objective, inequality_violations, equality_violations = g_suite.g22(x)
+```
+
+---
+
+### g23
+
+**Dimension:** 9
+**Constraints:** 2 inequality, 4 equality
+**Known Minimum:** -400.055
+
+#### Description
+G23 Constrained Benchmark Function.
+Dimension: 9
+Objective: minimize f(x)
+Constraints: 2 inequalities + 4 equalities
+Optimal: f(x*) = -400.055100000
+
+#### Code Example
+```python
+from bananabench import g_suite
+import numpy as np
+
+x = np.ones(9)
+objective, inequality_violations, equality_violations = g_suite.g23(x)
+```
+
+---
+
+### g24
+
+**Dimension:** 2
+**Constraints:** 2 inequality, 0 equality
+**Known Minimum:** -5.50801
+
+#### Description
+G24 Constrained Benchmark Function.
+Dimension: 2
+Objective: minimize f(x)
+Constraints: 2 inequalities (g_i(x) <= 0)
+Optimal: x* = (2.329520197, 3.178493496), f(x*) = -5.508013271
+
+#### Code Example
+```python
+from bananabench import g_suite
+import numpy as np
+
+x = np.ones(2)
+objective, inequality_violations, equality_violations = g_suite.g24(x)
+```
+
+---
+
+## Multi-Objective Suite (ZDT)
+
+The ZDT multi-objective suite (`zdt1`-`zdt4`, `zdt6`; `zdt5` is binary-encoded and excluded). Each function returns a 2-element `[f1, f2]` array rather than a single float, so this section is generated from its own `multiobjective.ZDT_SUITE` registry instead. See `bananabench.multiobjective` for details.
+
+Total functions: 5
+
+| Function | Default Dim | Objectives | Properties |
+|----------|--------------|------------|------------|
+| [zdt1](#zdt1) | 30D | 2 | multi-objective, continuous, differentiable, scalable, convex-front |
+| [zdt2](#zdt2) | 30D | 2 | multi-objective, continuous, differentiable, scalable, non-convex-front |
+| [zdt3](#zdt3) | 30D | 2 | multi-objective, continuous, differentiable, scalable, disconnected-front |
+| [zdt4](#zdt4) | 10D | 2 | multi-objective, continuous, differentiable, scalable, multimodal, convex-front |
+| [zdt6](#zdt6) | 10D | 2 | multi-objective, continuous, differentiable, scalable, non-convex-front |
+
+### zdt1
+
+**Default Dimension:** 30
+**Objectives:** 2
+**Properties:** multi-objective, continuous, differentiable, scalable, convex-front
+
+#### Description
+ZDT1: convex Pareto front.
+Dimension: scalable (default 30), bounds [0, 1]^n.
+Objectives: minimize f1(x), f2(x).
+
+#### Code Example
+```python
+from bananabench import multiobjective as mo
+import numpy as np
+
+x = np.zeros(30)
+f1, f2 = mo.zdt1(x)
+```
+
+---
+
+### zdt2
+
+**Default Dimension:** 30
+**Objectives:** 2
+**Properties:** multi-objective, continuous, differentiable, scalable, non-convex-front
+
+#### Description
+ZDT2: non-convex Pareto front.
+Dimension: scalable (default 30), bounds [0, 1]^n.
+Objectives: minimize f1(x), f2(x).
+
+#### Code Example
+```python
+from bananabench import multiobjective as mo
+import numpy as np
+
+x = np.zeros(30)
+f1, f2 = mo.zdt2(x)
+```
+
+---
+
+### zdt3
+
+**Default Dimension:** 30
+**Objectives:** 2
+**Properties:** multi-objective, continuous, differentiable, scalable, disconnected-front
+
+#### Description
+ZDT3: disconnected Pareto front (5 discrete segments).
+Dimension: scalable (default 30), bounds [0, 1]^n.
+Objectives: minimize f1(x), f2(x).
+
+#### Code Example
+```python
+from bananabench import multiobjective as mo
+import numpy as np
+
+x = np.zeros(30)
+f1, f2 = mo.zdt3(x)
+```
+
+---
+
+### zdt4
+
+**Default Dimension:** 10
+**Objectives:** 2
+**Properties:** multi-objective, continuous, differentiable, scalable, multimodal, convex-front
+
+#### Description
+ZDT4: many local Pareto fronts (multimodal g).
+Dimension: scalable (default 10), bounds x1 in [0, 1], x2..xn in [-5, 5].
+Objectives: minimize f1(x), f2(x).
+
+#### Code Example
+```python
+from bananabench import multiobjective as mo
+import numpy as np
+
+x = np.zeros(10)
+f1, f2 = mo.zdt4(x)
+```
+
+---
+
+### zdt6
+
+**Default Dimension:** 10
+**Objectives:** 2
+**Properties:** multi-objective, continuous, differentiable, scalable, non-convex-front
+
+#### Description
+ZDT6: non-convex, non-uniformly spaced Pareto front.
+Dimension: scalable (default 10), bounds [0, 1]^n.
+Objectives: minimize f1(x), f2(x).
+
+#### Code Example
+```python
+from bananabench import multiobjective as mo
+import numpy as np
+
+x = np.zeros(10)
+f1, f2 = mo.zdt6(x)
 ```
 
 ---

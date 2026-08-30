@@ -12,6 +12,92 @@ functionality from that history carries forward unchanged.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-16
+
+### Added
+- `g_suite` completed: constrained G-suite now covers all 24 problems (`g01`-`g24`, CEC2006),
+  up from the 4 (`g04`, `g06`, `g08`, `g11`) shipped in 0.1.0. Every formula, coefficient, and
+  known-optimum value was transcribed directly from the CEC2006 technical report and
+  cross-checked against pagmo's independent `cec2006` implementation where the two overlap.
+  `g20`'s documented "best known" point is itself acknowledged as slightly infeasible in the
+  source report — its `known_minimum` is indicative, not a strict target the way the others
+  are. `g23`'s published optimal vector is corrupted by a text-extraction artifact in the
+  source PDF (one coordinate garbled such that its 4th equality constraint doesn't check out);
+  the point used in tests was reconstructed from the other three equality constraints and
+  verified to land within 0.002 of the documented optimum.
+- New `multiobjective` module: the ZDT multi-objective suite (`zdt1`-`zdt4`, `zdt6`; `zdt5` is
+  binary-encoded and deliberately excluded, since it doesn't fit the `ndarray -> ndarray`
+  convention every other function in the package follows). Each function returns a 2-element
+  `[f1, f2]` objective array rather than a single float. Kept in its own `ZDT_SUITE` registry
+  (`get_mo_function_list`, `get_mo_bounds`) rather than `metadata.BENCHMARK_SUITE`, which
+  assumes a scalar `known_minimum` that doesn't apply to a Pareto front. `get_pareto_front()`
+  derives each true front analytically from the function's own formula (sweeping `x1` along
+  the manifold that minimizes its `g` term, then keeping the non-dominated subset) rather than
+  transcribing it from the source paper — this also correctly reconstructs ZDT3's disconnected
+  front and ZDT6's non-full-domain front. `igd()` and `non_dominated_front()` are general;
+  `hypervolume()` currently supports 2-objective fronts only (every ZDT problem is bi-objective;
+  general n-objective hypervolume is deferred to when DTLZ/WFG land).
+- New `MOBenchmarkRunner` in `benchmarking.py`: the multi-objective counterpart to
+  `BenchmarkRunner`, scoring a user-supplied `algorithm(func, bounds, n_objectives, **kwargs)
+  -> (X, F)` against the ZDT suite's true Pareto fronts via IGD (always) and hypervolume
+  (2-objective problems only). Kept as a separate class rather than an extension of
+  `BenchmarkRunner`, since the two don't share a "best cost" concept.
+- `examples/07_multiobjective_optimization.py`: direct ZDT evaluation plus a minimal
+  evolutionary optimizer run through `MOBenchmarkRunner`, in the style of the existing
+  numbered examples.
+- New `g_suite.G_SUITE` registry (`function`, `dim`, `n_inequality`, `n_equality`,
+  `known_minimum`), `get_g_function_list()`: the constrained suite's counterpart to
+  `multiobjective.ZDT_SUITE`, for tools that need to enumerate it without hand-parsing
+  docstrings. Constraint counts were cross-checked against a live call to every one of the 24
+  functions, not just transcribed.
+- CLI: new `--suite {scalar,constrained,multiobjective}` flag (default `scalar`, so existing
+  invocations are unaffected) on `--list`/`--info`/`--metadata`/`--function`, resolving function
+  names against `BENCHMARK_SUITE`, `g_suite.G_SUITE`, or `multiobjective.ZDT_SUITE` respectively.
+  `g01`-`g24` and `zdt1`-`zdt4`/`zdt6` are now listable, introspectable, and evaluable (single
+  point or CSV batch) from the command line, previously only reachable via Python. Evaluation
+  output is shaped per suite (a plain number; an
+  `{objective, inequality_violations, equality_violations}` object; an `{objectives: [f1, f2]}`
+  object).
+- `docs/generate_benchmark_functions.py` now also generates "Constrained Suite (g_suite)" and
+  "Multi-Objective Suite (ZDT)" sections in `docs/BENCHMARK_FUNCTIONS.md` from `G_SUITE`/
+  `ZDT_SUITE`, alongside the existing `BENCHMARK_SUITE`-derived table.
+- 15 new scalar functions, the first slice of the MVF gap-fill (`ROADMAP.md`): `hansen`,
+  `hartman3`, `hartman6`, `neumaier_perm`, `neumaier_perm0`, `neumaier_powersum`,
+  `neumaier_trid`, `paviani`, `plateau`, `powell`, `shekel2`, `shekel4_5`, `shekel4_7`,
+  `shekel4_10`, `shubert` — bringing `BENCHMARK_SUITE` from 59 to 74 functions. Every formula
+  was transcribed from `docs-bench/mvf.pdf`'s C source appendix (more reliable than its prose
+  section, which has the same OCR/text-extraction corruption already seen in g23's optimal
+  point) and independently verified via numerical optimization against the documented
+  known-minimum/optimal-point before being committed. Several source bugs were caught and
+  corrected in the process rather than reproduced:
+  - `hartman6`: the source's coefficient table has `p[2][1] = 0.1415`; both the source's own
+    prose description of the same function and independent literature (sfu.ca/~ssurjano) agree
+    on `0.1451`, which is also the value that actually reaches the documented -3.322368 optimum.
+  - `powell`: the source's stated optimal point, `(3,-1,0,1,...)`, does not reach its own
+    claimed minimum of 0 (evaluates to 215 instead) — the true global minimum is 0 at the zero
+    vector, matching the standard external reference for this function.
+  - The "Neumaier Perm"/"Perm0" C source sums per-term squares instead of squaring each
+    per-`k` inner sum, and Perm0's C code also indexes one element out of bounds (`x[i+1]` in
+    an `i`-length loop); both were implemented from the (correct, and independently
+    well-established) squared-outer-sum formula instead.
+  - "Neumaier Trid"'s C source never initializes its accumulator (`s2`), a latent
+    undefined-behavior bug; fixed by initializing it to 0.
+  - "Shekel2" (De Jong's function 5): the source computes one coordinate's penalty term to the
+    9th power and the other to the 6th (should be symmetric, both to the 6th), and offsets its
+    denominator by `j` instead of `j+1` (creating a division-by-zero at the very first grid
+    point, `x=(-32,-32)`). Implemented as the standard, symmetric, singularity-free formula.
+  - `shubert2`/`shubert3` and the 17-D `Cola`/10-D `Shekel10`/`OddSquare`/`Rana` functions from
+    the same gap-fill list were **not** included in this slice: `shubert2`/`shubert3` turned out
+    to be a near-duplicate or under-specified variant of `shubert` once decoded, and the other
+    four have no documented known-minimum anywhere in the source (`Cola` also has an
+    index-mapping scheme too ambiguous to resolve with confidence) — left for a follow-up
+    rather than guessing at unverifiable values.
+
+### Fixed
+- `docs/API_REFERENCE.md`'s `g_suite` section had gone stale after the G-suite completion above
+  landed: it still listed only the original 4 functions (`g04`, `g06`, `g08`, `g11`) instead of
+  all 24.
+
 ## [0.1.0] - 2026-08-16
 
 First release under the `banana-bench` name (PyPI: `banana-bench`, import name:

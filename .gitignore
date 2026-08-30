@@ -57,3 +57,5 @@ benchmark_results.json
 *.gif
 !docs/**/*.png
 !docs/**/*.gif
+
+docs-bench

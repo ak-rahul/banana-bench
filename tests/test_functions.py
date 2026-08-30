@@ -167,6 +167,8 @@ class TestFunctionProperties:
     def test_scalable_functions_accept_other_dimensions(self, name):
         if name == "langerman":
             pytest.skip("langerman has a hardcoded 10-dimensional coefficient table")
+        if name == "powell":
+            pytest.skip("powell requires a dimension divisible by 4")
         for dim in (2, 6, 10):  # even dims only: rosenbrock_ext1/ext2 require pairs
             result = BENCHMARK_SUITE[name]["function"](_sample_within_bounds(name, dim=dim))
             assert np.isfinite(result)
@@ -216,6 +218,17 @@ class TestDimensionValidation:
             ("xor", 9),
             ("zettl", 2),
             ("zimmerman", 2),
+            ("hansen", 2),
+            ("hartman3", 3),
+            ("hartman6", 6),
+            ("neumaier_powersum", 4),
+            ("paviani", 10),
+            ("plateau", 5),
+            ("powell", 4),
+            ("shekel2", 2),
+            ("shekel4_5", 4),
+            ("shekel4_7", 4),
+            ("shekel4_10", 4),
         ],
     )
     def test_wrong_dimension_raises_value_error(self, name, expected_dim):

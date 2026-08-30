@@ -4,7 +4,7 @@ This guide provides detailed instructions on how to use `banana-bench` effective
 
 ## 🎯 Using Benchmark Metadata
 
-The package provides comprehensive metadata for all 55+ functions, eliminating the need to manually specify bounds and known minima.
+The package provides comprehensive metadata for all 70+ functions, eliminating the need to manually specify bounds and known minima.
 
 ```python
 from bananabench import BENCHMARK_SUITE, get_function_info, get_bounds
@@ -31,7 +31,7 @@ bounds_5d = get_bounds('ackley', dim=5)
 
 | Function | Description |
 |----------|-------------|
-| `BENCHMARK_SUITE` | Dictionary with all 55+ functions and metadata |
+| `BENCHMARK_SUITE` | Dictionary with all 70+ functions and metadata |
 | `get_all_functions()` | Returns list of all function names |
 | `get_function_info(name)` | Returns metadata for specific function |
 | `get_bounds(name, dim=None)` | Returns bounds for given dimension |
