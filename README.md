@@ -8,7 +8,7 @@
 [![Docs](https://app.readthedocs.org/projects/banana-bench/badge/?version=latest)](https://banana-bench.readthedocs.io/en/latest/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-A comprehensive collection of 55+ standard mathematical benchmark functions for testing and evaluating optimization algorithms.
+A comprehensive collection of 70+ standard mathematical benchmark functions for testing and evaluating optimization algorithms.
 
 > **Why "banana-bench"?** Rosenbrock's function — one of the most famous test functions in
 > optimization, and part of this suite (`rosenbrock`) — is nicknamed the "banana function" for its
@@ -19,13 +19,13 @@ A comprehensive collection of 55+ standard mathematical benchmark functions for 
 Full documentation is published at **[banana-bench.readthedocs.io](https://banana-bench.readthedocs.io/)**, built from the sources in the `docs/` directory:
 
 - **[User Guide & Examples](docs/USER_GUIDE.md)**: Detailed tutorials on metadata, benchmarking, and utilities.
-- **[Function Reference](docs/BENCHMARK_FUNCTIONS.md)**: Complete guide to all 55+ functions with domains and global minima.
+- **[Function Reference](docs/BENCHMARK_FUNCTIONS.md)**: Complete guide to all 70+ functions with domains and global minima.
 - **[Visualization Gallery](docs/VISUALIZATION.md)**: Examples of all plotting and analysis tools.
 - **[API Reference](docs/API_REFERENCE.md)**: Class and function definitions.
 
 ## 🎯 Features
 
-- **55+ Benchmark Functions**: Multimodal, Unimodal, and Special functions.
+- **70+ Benchmark Functions**: Multimodal, Unimodal, and Special functions.
 - **Rich Metadata**: Access bounds, dimensions, known minima programmatically.
 - **Visualization**: 2D/3D plots, convergence tracking, and heatmaps.
 - **Benchmarking Tools**: Automated testing with `BenchmarkRunner`.

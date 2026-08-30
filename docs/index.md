@@ -1,6 +1,6 @@
 # banana-bench Documentation
 
-`banana-bench` is a collection of 55+ standard mathematical benchmark functions for testing and
+`banana-bench` is a collection of 70+ standard mathematical benchmark functions for testing and
 evaluating optimization algorithms, plus metadata, benchmarking, visualization, and wrapper
 utilities built around them. Core functionality depends only on NumPy; everything else is optional.
 
