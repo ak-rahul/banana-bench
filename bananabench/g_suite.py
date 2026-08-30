@@ -16,7 +16,19 @@ g20 is a known exception: the technical report itself states that its listed
 "best known solution" is slightly infeasible and that no fully feasible point
 has ever been verified for this problem. Its known_minimum should be treated
 as indicative, not a target a solver is expected to reach exactly.
+
+``G_SUITE`` is a lightweight registry (function, dim, constraint counts, known
+minimum) for tools that need to enumerate/introspect the suite (the CLI,
+docs generator) without hand-parsing docstrings. It's deliberately smaller
+than ``metadata.BENCHMARK_SUITE`` -- no ``bounds``/``optimal_point``/
+``properties`` fields -- since those vary in shape per problem (some g-suite
+problems have no box bounds at all) in ways that don't fit that schema
+cleanly; see each function's own docstring for bounds and the optimal point.
+``n_inequality``/``n_equality`` were cross-checked by calling every function
+and measuring the actual returned array lengths, not just transcribed.
 """
+
+from typing import Callable, Dict, List, Tuple, TypedDict
 
 import numpy as np
 
@@ -835,3 +847,170 @@ def g23(x: np.ndarray):
     h[3] = x[3] + x[6] - x[7]
 
     return f, g, h
+
+
+class _GEntry(TypedDict):
+    function: Callable[[np.ndarray], Tuple[float, np.ndarray, np.ndarray]]
+    dim: int
+    n_inequality: int
+    n_equality: int
+    known_minimum: float
+
+
+G_SUITE: Dict[str, _GEntry] = {
+    "g01": {"function": g01, "dim": 13, "n_inequality": 9, "n_equality": 0, "known_minimum": -15.0},
+    "g02": {
+        "function": g02,
+        "dim": 20,
+        "n_inequality": 2,
+        "n_equality": 0,
+        "known_minimum": -0.803619104,
+    },
+    "g03": {
+        "function": g03,
+        "dim": 10,
+        "n_inequality": 0,
+        "n_equality": 1,
+        "known_minimum": -1.000500100,
+    },
+    "g04": {
+        "function": g04,
+        "dim": 5,
+        "n_inequality": 6,
+        "n_equality": 0,
+        "known_minimum": -30665.539,
+    },
+    "g05": {
+        "function": g05,
+        "dim": 4,
+        "n_inequality": 2,
+        "n_equality": 3,
+        "known_minimum": 5126.496714007,
+    },
+    "g06": {
+        "function": g06,
+        "dim": 2,
+        "n_inequality": 2,
+        "n_equality": 0,
+        "known_minimum": -6961.81388,
+    },
+    "g07": {
+        "function": g07,
+        "dim": 10,
+        "n_inequality": 8,
+        "n_equality": 0,
+        "known_minimum": 24.306209068,
+    },
+    "g08": {
+        "function": g08,
+        "dim": 2,
+        "n_inequality": 2,
+        "n_equality": 0,
+        "known_minimum": -0.095825,
+    },
+    "g09": {
+        "function": g09,
+        "dim": 7,
+        "n_inequality": 4,
+        "n_equality": 0,
+        "known_minimum": 680.630057374,
+    },
+    "g10": {
+        "function": g10,
+        "dim": 8,
+        "n_inequality": 6,
+        "n_equality": 0,
+        "known_minimum": 7049.248020529,
+    },
+    "g11": {"function": g11, "dim": 2, "n_inequality": 0, "n_equality": 1, "known_minimum": 0.7499},
+    "g12": {"function": g12, "dim": 3, "n_inequality": 1, "n_equality": 0, "known_minimum": -1.0},
+    "g13": {
+        "function": g13,
+        "dim": 5,
+        "n_inequality": 0,
+        "n_equality": 3,
+        "known_minimum": 0.053941514,
+    },
+    "g14": {
+        "function": g14,
+        "dim": 10,
+        "n_inequality": 0,
+        "n_equality": 3,
+        "known_minimum": -47.764888459,
+    },
+    "g15": {
+        "function": g15,
+        "dim": 3,
+        "n_inequality": 0,
+        "n_equality": 2,
+        "known_minimum": 961.715022290,
+    },
+    "g16": {
+        "function": g16,
+        "dim": 5,
+        "n_inequality": 38,
+        "n_equality": 0,
+        "known_minimum": -1.905155259,
+    },
+    "g17": {
+        "function": g17,
+        "dim": 6,
+        "n_inequality": 0,
+        "n_equality": 4,
+        "known_minimum": 8853.539674806,
+    },
+    "g18": {
+        "function": g18,
+        "dim": 9,
+        "n_inequality": 13,
+        "n_equality": 0,
+        "known_minimum": -0.866025404,
+    },
+    "g19": {
+        "function": g19,
+        "dim": 15,
+        "n_inequality": 5,
+        "n_equality": 0,
+        "known_minimum": 32.655592950,
+    },
+    "g20": {
+        "function": g20,
+        "dim": 24,
+        "n_inequality": 6,
+        "n_equality": 14,
+        "known_minimum": 0.204979400,
+    },
+    "g21": {
+        "function": g21,
+        "dim": 7,
+        "n_inequality": 1,
+        "n_equality": 5,
+        "known_minimum": 193.724510070,
+    },
+    "g22": {
+        "function": g22,
+        "dim": 22,
+        "n_inequality": 1,
+        "n_equality": 19,
+        "known_minimum": 236.430975504,
+    },
+    "g23": {
+        "function": g23,
+        "dim": 9,
+        "n_inequality": 2,
+        "n_equality": 4,
+        "known_minimum": -400.055100000,
+    },
+    "g24": {
+        "function": g24,
+        "dim": 2,
+        "n_inequality": 2,
+        "n_equality": 0,
+        "known_minimum": -5.508013271,
+    },
+}
+
+
+def get_g_function_list() -> List[str]:
+    """Return the names of every function in ``G_SUITE``."""
+    return list(G_SUITE.keys())

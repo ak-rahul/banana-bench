@@ -590,3 +590,25 @@ def test_g_suite_module_exposed_on_package():
     from bananabench import g_suite as pkg_g_suite
 
     assert pkg_g_suite.g04 is g_suite.g04
+
+
+class TestGSuiteRegistry:
+    def test_covers_all_24_problems(self):
+        assert set(g_suite.G_SUITE.keys()) == {f"g{i:02d}" for i in range(1, 25)}
+
+    def test_get_g_function_list_matches_registry(self):
+        assert set(g_suite.get_g_function_list()) == set(g_suite.G_SUITE.keys())
+
+    @pytest.mark.parametrize("name", list(g_suite.G_SUITE.keys()))
+    def test_entry_function_matches_module_function(self, name):
+        assert g_suite.G_SUITE[name]["function"] is getattr(g_suite, name)
+
+    @pytest.mark.parametrize("name", list(g_suite.G_SUITE.keys()))
+    def test_constraint_counts_match_actual_returned_arrays(self, name):
+        # Cross-check the registry's n_inequality/n_equality against a live call,
+        # not just the transcribed docstring, so the two can't silently drift.
+        entry = g_suite.G_SUITE[name]
+        x = np.ones(entry["dim"])
+        f, g, h = entry["function"](x)
+        assert len(g) == entry["n_inequality"]
+        assert len(h) == entry["n_equality"]

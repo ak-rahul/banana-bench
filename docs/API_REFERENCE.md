@@ -44,7 +44,7 @@ BenchmarkRunner(
 
 Run the benchmark suite on selected functions.
 
-- `functions`: List of function names (e.g., `['sphere', 'ackley']`). If None, runs all 55+ functions.
+- `functions`: List of function names (e.g., `['sphere', 'ackley']`). If None, runs all 70+ functions.
 - `dimensions`: Dictionary mapping function names to custom dimensions (e.g., `{'sphere': 10}`).
 - `**kwargs`: Additional arguments passed to your optimization algorithm.
 
@@ -143,9 +143,16 @@ extra dependencies; `plotly_viz` degrades gracefully if `plotly` is not installe
   into a single weighted composition, a hallmark of the CEC 2017/2020 benchmark suites.
 
 **`g_suite` — constrained G-function suite**
-- `g04(x)`, `g06(x)`, `g08(x)`, `g11(x)`: classic constrained benchmark problems from the 2006
-  CEC Special Session on Constrained Real-Parameter Optimization. Each returns
+- `g01(x)` ... `g24(x)`: the complete classic G-suite (all 24 problems) from the 2006 CEC Special
+  Session on Constrained Real-Parameter Optimization. Each returns
   `(objective, inequality_violations, equality_violations)` as `(float, np.ndarray, np.ndarray)`.
+  `g20`'s documented "best known" point is itself acknowledged as slightly infeasible in the
+  source report — treat its `known_minimum` as indicative, not a strict target.
+- `G_SUITE`: registry dict keyed by function name, with `function`, `dim`, `n_inequality`,
+  `n_equality`, and `known_minimum` — a lighter-weight counterpart to `ZDT_SUITE`/
+  `BENCHMARK_SUITE` (no `bounds`/`optimal_point`/`properties`, since those vary in shape per
+  problem in ways that don't fit a single schema cleanly; see each function's own docstring).
+- `get_g_function_list()`: registry accessor, analogous to `get_mo_function_list()`.
 
 **`multiobjective` — ZDT multi-objective suite**
 - `zdt1(x)` ... `zdt4(x)`, `zdt6(x)`: the five real-valued ZDT problems (ZDT5 is binary-encoded and
@@ -176,6 +183,24 @@ extra dependencies; `plotly_viz` degrades gracefully if `plotly` is not installe
 - `plot_contour_interactive(func, bounds, resolution=100, log_scale=False, show=True)`: interactive
   2D contour plot.
 - Both raise `ImportError` with an install hint if `plotly` is not available.
+
+### Command-line interface
+
+The `banana-bench` entry point (equivalently `python -m bananabench`) supports `--list`, `--info
+FUNCTION`, `--metadata FUNCTION`, and `--function FUNCTION --values ...` / `--input FILE.csv
+--output results.json`. All of these accept `--suite {scalar,constrained,multiobjective}`
+(default `scalar`) to resolve the function name against `BENCHMARK_SUITE`, `g_suite.G_SUITE`
+(`g01`-`g24`), or `multiobjective.ZDT_SUITE` (`zdt1`-`zdt4`, `zdt6`) respectively. Evaluation
+output is shaped per suite: `scalar` returns a plain number, `constrained` returns
+`{"objective": ..., "inequality_violations": [...], "equality_violations": [...]}`, and
+`multiobjective` returns `{"objectives": [f1, f2]}`. Run `banana-bench --help` for the full flag
+reference and examples.
+
+```bash
+banana-bench --list --suite constrained
+banana-bench --function g01 --suite constrained --values 1 1 1 1 1 1 1 1 1 3 3 3 1
+banana-bench --function zdt1 --suite multiobjective --values 0.5 0 0
+```
 
 ### `quick_benchmark`
 
