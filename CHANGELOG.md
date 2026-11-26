@@ -12,7 +12,7 @@ functionality from that history carries forward unchanged.
 
 ## [Unreleased]
 
-## [0.3.0] - 2026-08-30
+## [0.3.0] - 2026-11-26
 
 ### Added
 - `examples/09_cec_style_composition.py`: demonstrates `cec.CECFunction`/
@@ -105,6 +105,8 @@ functionality from that history carries forward unchanged.
 - `README.md`'s feature list now covers the constrained (G-suite,
   engineering), multi-objective (ZDT), CEC-style composition, and CLI
   features, and lists every optional install extra rather than only `viz`.
+  Its documentation links are now absolute GitHub URLs, so they also work
+  on the PyPI project page, where relative `docs/...` links returned 404.
 
 ### Removed
 - Python 3.9 support. `requires-python` is now `>=3.10`. Python 3.9 reached

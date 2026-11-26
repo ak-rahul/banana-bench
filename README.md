@@ -18,10 +18,10 @@ A comprehensive collection of 70+ standard mathematical benchmark functions for 
 
 Full documentation is published at **[banana-bench.readthedocs.io](https://banana-bench.readthedocs.io/)**, built from the sources in the `docs/` directory:
 
-- **[User Guide & Examples](docs/USER_GUIDE.md)**: Detailed tutorials on metadata, benchmarking, and utilities.
-- **[Function Reference](docs/BENCHMARK_FUNCTIONS.md)**: Complete guide to all 70+ functions with domains and global minima.
-- **[Visualization Gallery](docs/VISUALIZATION.md)**: Examples of all plotting and analysis tools.
-- **[API Reference](docs/API_REFERENCE.md)**: Class and function definitions.
+- **[User Guide & Examples](https://github.com/ak-rahul/banana-bench/blob/main/docs/USER_GUIDE.md)**: Detailed tutorials on metadata, benchmarking, and utilities.
+- **[Function Reference](https://github.com/ak-rahul/banana-bench/blob/main/docs/BENCHMARK_FUNCTIONS.md)**: Complete guide to all 70+ functions with domains and global minima.
+- **[Visualization Gallery](https://github.com/ak-rahul/banana-bench/blob/main/docs/VISUALIZATION.md)**: Examples of all plotting and analysis tools.
+- **[API Reference](https://github.com/ak-rahul/banana-bench/blob/main/docs/API_REFERENCE.md)**: Class and function definitions.
 
 ## 🎯 Features
 
@@ -83,4 +83,4 @@ runner = BenchmarkRunner(my_optimizer, "MyAlgo", n_runs=5)
 results = runner.run_suite(functions=['sphere', 'ackley'])
 ```
 
-For detailed usage, see the **[User Guide](docs/USER_GUIDE.md)**.
+For detailed usage, see the **[User Guide](https://github.com/ak-rahul/banana-bench/blob/main/docs/USER_GUIDE.md)**.
