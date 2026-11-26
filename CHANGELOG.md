@@ -12,7 +12,7 @@ functionality from that history carries forward unchanged.
 
 ## [Unreleased]
 
-## [0.4.0] - 2026-11-27
+## [0.4.0] - 2026-12-26
 
 ### Added
 - New `bananabench.tracking` module. `TrackedFunction(func, max_evals=None,
