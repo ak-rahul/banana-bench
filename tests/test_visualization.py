@@ -8,6 +8,7 @@ window during the run.
 
 import os
 import shutil
+import warnings
 
 import numpy as np
 import pytest
@@ -131,6 +132,17 @@ class TestSearchHeatmap:
         points = np.random.uniform(-5, 5, (50, 2))
         fig = plot_search_heatmap("sphere", points, bins=10)
         assert fig is not None
+        plt.close(fig)
+
+    def test_no_spurious_legend_warning_for_replicated_style_optimal_point(self):
+        # sphere's optimal_point is [0.0] -- a "replicate across dims" shorthand,
+        # not a literal (x, y) pair -- so plot_search_heatmap has nothing to plot
+        # or label for it and must not call ax.legend() with no labeled artists
+        # (matplotlib emits "No artists with labels found..." as a UserWarning).
+        points = np.random.uniform(-5, 5, (10, 2))
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            fig = plot_search_heatmap("sphere", points, bins=5)
         plt.close(fig)
 
 

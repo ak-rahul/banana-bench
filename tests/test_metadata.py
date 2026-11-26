@@ -16,6 +16,7 @@ from bananabench.metadata import (
     get_bounds,
     get_function_info,
     get_function_list,
+    query_functions,
 )
 
 REQUIRED_FIELDS = [
@@ -117,6 +118,82 @@ class TestGetFunctionList:
         assert isinstance(listing, str)
         for name in get_all_functions():
             assert name in listing
+
+    def test_does_not_round_a_tiny_known_minimum_to_zero(self):
+        # `gear`'s known_minimum (~2.7e-12) rounds to "0.0000" under plain
+        # fixed-point formatting, which reads as an exact zero -- the listing
+        # should fall back to scientific notation instead of losing the value.
+        for line in get_function_list().splitlines():
+            if line.startswith("gear "):
+                assert "0.0000" not in line
+                assert "e-12" in line
+                break
+        else:
+            pytest.fail("gear row not found in get_function_list() output")
+
+
+class TestQueryFunctions:
+    def test_no_filters_returns_every_function(self):
+        assert query_functions() == get_all_functions()
+
+    def test_result_is_sorted(self):
+        result = query_functions(scalable=True)
+        assert result == sorted(result)
+
+    @pytest.mark.parametrize(
+        "kwargs,tag",
+        [
+            ({"separable": True}, "separable"),
+            ({"separable": False}, "non-separable"),
+            ({"differentiable": True}, "differentiable"),
+            ({"differentiable": False}, "non-differentiable"),
+            ({"continuous": True}, "continuous"),
+            ({"continuous": False}, "discontinuous"),
+            ({"unimodal": True}, "unimodal"),
+            ({"unimodal": False}, "multimodal"),
+            ({"convex": True}, "convex"),
+            ({"convex": False}, "non-convex"),
+        ],
+    )
+    def test_single_axis_matches_brute_force_tag_membership(self, kwargs, tag):
+        # Cross-check against a direct BENCHMARK_SUITE scan rather than a hardcoded
+        # name list, so this can't go stale as functions are added (same discipline
+        # as TestBenchmarkSuiteCompleteness above).
+        expected = sorted(
+            name for name, meta in BENCHMARK_SUITE.items() if tag in meta["properties"]
+        )
+        assert query_functions(**kwargs) == expected
+
+    def test_scalable_true_requires_the_tag(self):
+        expected = sorted(
+            name for name, meta in BENCHMARK_SUITE.items() if "scalable" in meta["properties"]
+        )
+        assert query_functions(scalable=True) == expected
+
+    def test_scalable_false_requires_the_tags_absence(self):
+        # There's no explicit 'non-scalable' tag in the schema; absence is the signal.
+        expected = sorted(
+            name for name, meta in BENCHMARK_SUITE.items() if "scalable" not in meta["properties"]
+        )
+        assert query_functions(scalable=False) == expected
+
+    def test_combined_filters_are_intersected(self):
+        expected = sorted(
+            name
+            for name, meta in BENCHMARK_SUITE.items()
+            if "non-separable" in meta["properties"]
+            and "multimodal" in meta["properties"]
+            and "scalable" in meta["properties"]
+        )
+        assert query_functions(separable=False, unimodal=False, scalable=True) == expected
+
+    def test_function_with_no_tag_on_an_axis_matches_neither_true_nor_false(self):
+        # neumaier_powersum has neither a 'unimodal' nor a 'multimodal' tag (modality
+        # wasn't derivable), so it shouldn't satisfy either side of that axis.
+        assert "unimodal" not in BENCHMARK_SUITE["neumaier_powersum"]["properties"]
+        assert "multimodal" not in BENCHMARK_SUITE["neumaier_powersum"]["properties"]
+        assert "neumaier_powersum" not in query_functions(unimodal=True)
+        assert "neumaier_powersum" not in query_functions(unimodal=False)
 
 
 class TestMetadataAgreesWithFunctionsModule:

@@ -55,6 +55,10 @@ Run the benchmark suite on selected functions.
 Save benchmark results to a file.
 - `format`: 'csv' or 'json'.
 
+A run mixing successes and failures saves correctly under either format — a failed run's result
+dict has fewer keys than a successful one's, and the CSV writer accounts for that (blank cells for
+keys a given row doesn't have) rather than requiring every row to share one key set.
+
 **`get_summary_stats()`**
 
 Returns a dictionary containing aggregate statistics (mean error, success rate, etc.).
@@ -78,6 +82,12 @@ Wrappers modify the behavior of benchmark functions. They follow the decorator p
 - `func`: The benchmark function to wrap.
 - `matrix`: An orthogonal rotation matrix ($n \times n$).
   - Evaluates $f(M \cdot x)$.
+
+**Composing wrappers**: since each one just takes `Callable[[np.ndarray], float]` (including
+another wrapper instance), they stack by nesting —
+`NoisyFunction(RotatedFunction(ShiftedFunction(f, shift), matrix), scale=0.05)`. Nesting order
+changes the result (a shift applied before vs. after a rotation are different transforms); see
+`USER_GUIDE.md`'s "Composing Wrappers" for the exact semantics.
 
 ### `MOBenchmarkRunner`
 
@@ -120,25 +130,30 @@ Run the algorithm across multiple ZDT problems.
 - `dimensions`: Dictionary mapping function names to custom dimensions.
 - `**kwargs`: Additional arguments passed to your optimization algorithm.
 
-**Returns:** A list of result dictionaries, each with `igd`, `hypervolume` (2-objective problems
-only), `n_solutions`, `n_nondominated`, and `time`.
+**Returns:** A list of result dictionaries. On success: `status="success"`, `success=True`, `igd`,
+`hypervolume` (2-objective problems only), `n_solutions`, `n_nondominated`, and `time`. If your
+algorithm raises for a given function, that function's dict instead carries `status="exception"`,
+`success=False`, and `error_message` — one failing function doesn't abort the rest of the suite.
 
 **`run_single(function_name, dim=None, reference_point=None, **kwargs)`**
 
 Run the algorithm on a single ZDT problem. `reference_point` overrides the default hypervolume
-reference point (1.1x the true front's per-objective max).
+reference point (1.1x the true front's per-objective max). Isolates an exception from your
+algorithm into a failure result dict rather than raising, matching `BenchmarkRunner.run_single`.
 
 ### Extended Modules
 
-These modules are imported eagerly (`bananabench.cec`, `.g_suite`, `.gradients`,
-`.multiobjective`, `.plotly_viz`) but only `gradients`, `g_suite`, and `multiobjective` have no
-extra dependencies; `plotly_viz` degrades gracefully if `plotly` is not installed
-(`pip install 'banana-bench[interactive]'`).
+These modules are imported eagerly (`bananabench.cec`, `.constraints`, `.engineering`, `.g_suite`,
+`.gradients`, `.multiobjective`, `.plotly_viz`) but only `constraints`, `gradients`, `engineering`,
+`g_suite`, and `multiobjective` have no extra dependencies; `plotly_viz` degrades gracefully if
+`plotly` is not installed (`pip install 'banana-bench[interactive]'`).
 
 **`cec` — CEC-style composition framework**
 - `CECFunction(base_func, shift_vector=None, rotation_matrix=None, bias=0.0)`: wraps any
-  benchmark function with an optional shift, rotation, and additive bias, evaluated as
-  `base_func(rotation @ (x - shift)) + bias`.
+  callable — the bundled suite or your own function, `base_func` isn't restricted to
+  `bananabench`'s functions — with an optional shift, rotation, and additive bias, evaluated as
+  `base_func(rotation @ (x - shift)) + bias`. See `examples/09_cec_style_composition.py` for
+  wrapping/composing a user-defined function this way.
 - `CECCompositionFunction(functions, sigma, biases)`: combines several `CECFunction` instances
   into a single weighted composition, a hallmark of the CEC 2017/2020 benchmark suites.
 
@@ -153,6 +168,33 @@ extra dependencies; `plotly_viz` degrades gracefully if `plotly` is not installe
   `BENCHMARK_SUITE` (no `bounds`/`optimal_point`/`properties`, since those vary in shape per
   problem in ways that don't fit a single schema cleanly; see each function's own docstring).
 - `get_g_function_list()`: registry accessor, analogous to `get_mo_function_list()`.
+
+**`engineering` — classic engineering design suite**
+- `spring_design(x)`, `pressure_vessel(x)`, `welded_beam(x)`, `gear_train(x)`: four widely-used
+  mechanical/structural design benchmarks (tension/compression spring, pressure vessel, welded
+  beam, gear train), each from its own original paper rather than a shared suite report — see
+  `bananabench.engineering`'s module docstring and each function's docstring for sources. Follows
+  `g_suite`'s convention: each returns `(objective, inequality_violations, equality_violations)`
+  as `(float, np.ndarray, np.ndarray)`; none of the four has an equality constraint.
+  `gear_train` has no constraints at all beyond its box bounds.
+- `ENGINEERING_SUITE`: registry dict keyed by function name, same shape as `G_SUITE` (`function`,
+  `dim`, `n_inequality`, `n_equality`, `known_minimum`) and for the same reason (bounds vary too
+  much per-problem to fit one schema).
+- `get_engineering_function_list()`: registry accessor, analogous to `get_g_function_list()`.
+
+**`constraints` — feasibility-comparison helper for the G-suite/engineering suites**
+- `feasibility_compare(a, b, tol=1e-6) -> int`: ranks two
+  `(objective, inequality_violations, equality_violations)` results (the return shape of every
+  `g_suite`/`engineering` function) using Deb (2000)'s feasibility rule — feasible beats infeasible,
+  then lower objective among feasible pairs, then smaller total violation among infeasible pairs.
+  Returns `-1` if `a` is preferred, `1` if `b` is preferred, `0` on an exact tie. `BenchmarkRunner`
+  assumes a scalar cost, so it doesn't fit this tuple shape directly — use this to rank results from
+  the constrained suites instead of hand-rolling the comparison.
+- `is_feasible(inequality_violations, equality_violations=(), tol=1e-6) -> bool`: `True` iff every
+  inequality entry is `<= tol` and every equality entry's absolute value is `<= tol`.
+- `constraint_violation(inequality_violations, equality_violations=(), tol=1e-6) -> float`: total
+  violation magnitude — the sum of each violated inequality's positive excess plus each violated
+  equality constraint's absolute deviation from zero. `0.0` exactly when `is_feasible` is `True`.
 
 **`multiobjective` — ZDT multi-objective suite**
 - `zdt1(x)` ... `zdt4(x)`, `zdt6(x)`: the five real-valued ZDT problems (ZDT5 is binary-encoded and
@@ -188,17 +230,19 @@ extra dependencies; `plotly_viz` degrades gracefully if `plotly` is not installe
 
 The `banana-bench` entry point (equivalently `python -m bananabench`) supports `--list`, `--info
 FUNCTION`, `--metadata FUNCTION`, and `--function FUNCTION --values ...` / `--input FILE.csv
---output results.json`. All of these accept `--suite {scalar,constrained,multiobjective}`
+--output results.json`. All of these accept `--suite {scalar,constrained,engineering,multiobjective}`
 (default `scalar`) to resolve the function name against `BENCHMARK_SUITE`, `g_suite.G_SUITE`
-(`g01`-`g24`), or `multiobjective.ZDT_SUITE` (`zdt1`-`zdt4`, `zdt6`) respectively. Evaluation
-output is shaped per suite: `scalar` returns a plain number, `constrained` returns
+(`g01`-`g24`), `engineering.ENGINEERING_SUITE` (`spring_design`, `pressure_vessel`, `welded_beam`,
+`gear_train`), or `multiobjective.ZDT_SUITE` (`zdt1`-`zdt4`, `zdt6`) respectively. Evaluation
+output is shaped per suite: `scalar` returns a plain number, `constrained`/`engineering` return
 `{"objective": ..., "inequality_violations": [...], "equality_violations": [...]}`, and
-`multiobjective` returns `{"objectives": [f1, f2]}`. Run `banana-bench --help` for the full flag
-reference and examples.
+`multiobjective` returns `{"objectives": [f1, f2]}`. `--version` prints the installed version.
+Run `banana-bench --help` for the full flag reference and examples.
 
 ```bash
 banana-bench --list --suite constrained
 banana-bench --function g01 --suite constrained --values 1 1 1 1 1 1 1 1 1 3 3 3 1
+banana-bench --function spring_design --suite engineering --values 0.05 0.25 2.0
 banana-bench --function zdt1 --suite multiobjective --values 0.5 0 0
 ```
 
@@ -217,12 +261,33 @@ results = quick_benchmark(
 )
 ```
 
+### `compare_algorithms(runners)`
+
+Builds a side-by-side text comparison table across multiple already-benchmarked
+`BenchmarkRunner` instances (each must have had `run_suite()` called at least once), ranked by
+mean error ascending. An algorithm with zero successful runs sorts last rather than raising.
+Raises `ValueError` if fewer than two runners are given.
+
+```python
+from bananabench import BenchmarkRunner, compare_algorithms
+
+runner_a = BenchmarkRunner(algo_a, algorithm_name='AlgoA')
+runner_a.run_suite(functions=['sphere', 'ackley'])
+runner_b = BenchmarkRunner(algo_b, algorithm_name='AlgoB')
+runner_b.run_suite(functions=['sphere', 'ackley'])
+
+print(compare_algorithms([runner_a, runner_b]))
+```
+
 ## Utility Functions
 
 ### Bounds & Geometry
 
 **`normalize_bounds(bounds, dim)`**
-Converts various bound formats into a standard list of `(min, max)` tuples.
+Converts various bound formats into a standard list of `(min, max)` tuples: a single `(min, max)`
+replicated across `dim` dimensions, or an explicit per-dimension list of length `dim`. Raises
+`ValueError` for anything else, rather than guessing — e.g. an explicit bounds list whose length
+doesn't match `dim`.
 
 **`check_bounds(point, bounds)`**
 Returns `True` if point is within bounds.
@@ -242,6 +307,15 @@ Returns a list of all available function names.
 Returns a dictionary with keys: `function`, `properties`, `bounds`, `default_dim`, `known_minimum`, `optimal_point`.
 `properties` is a list of tags such as `continuous`/`discontinuous`, `differentiable`/`non-differentiable`,
 `separable`/`non-separable`, `scalable`, and `unimodal`/`multimodal`/`convex`/`non-convex` where established.
+
+**`query_functions(separable=None, scalable=None, differentiable=None, continuous=None, unimodal=None, convex=None)`**
+Finds function names by combining `properties` tags declaratively instead of hand-filtering
+`BENCHMARK_SUITE` yourself — e.g. `query_functions(separable=False, unimodal=False, scalable=True)`
+returns every non-separable, multimodal, scalable function. Each parameter is `True`/`False`/`None`
+(don't filter on that axis); a function carrying neither tag on a requested axis (modality/convexity
+aren't always asserted — see `get_function_info`) matches neither `True` nor `False` for it. `scalable`
+has no opposite tag in the schema, so `scalable=False` means the tag's *absence* (fixed-dimension).
+Scoped to the scalar suite only — `g_suite`/`engineering`/`multiobjective` don't carry this schema.
 
 ## Type Hints
 

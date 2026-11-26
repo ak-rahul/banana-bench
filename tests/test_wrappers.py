@@ -71,3 +71,59 @@ class TestRotatedFunction:
         rotated_sphere = RotatedFunction(sphere, matrix=identity)
         x = np.array([1.0, -2.0, 3.0])
         assert np.isclose(rotated_sphere(x), sphere(x))
+
+
+class TestChainedWrappers:
+    """Each wrapper is itself a callable another wrapper can wrap, e.g.
+    NoisyFunction(RotatedFunction(ShiftedFunction(f, shift), matrix), scale=...) --
+    stacking works today but wasn't previously exercised by tests, despite
+    "any callable, including your own research function" being a stated
+    differentiator."""
+
+    def test_shift_then_rotate_finds_the_transformed_optimum(self):
+        shift = np.array([2.0, 3.0])
+        matrix = np.array([[0.0, -1.0], [1.0, 0.0]])  # 90-degree rotation
+        composed = RotatedFunction(ShiftedFunction(sphere, shift=shift), matrix=matrix)
+        # composed(x) = sphere(matrix @ x - shift); zero when matrix @ x == shift,
+        # i.e. x = matrix.T @ shift (matrix is orthogonal, so its inverse is its transpose).
+        x_star = matrix.T @ shift
+        assert np.isclose(composed(x_star), 0.0)
+
+    def test_composition_order_changes_the_result(self):
+        # RotatedFunction(ShiftedFunction(f, s), M) evaluates f(M @ x - s);
+        # ShiftedFunction(RotatedFunction(f, M), s) evaluates f(M @ (x - s)).
+        # These agree only when M @ s == s, which a 90-degree rotation doesn't satisfy here.
+        shift = np.array([1.0, 0.0])
+        matrix = np.array([[0.0, -1.0], [1.0, 0.0]])
+        x = np.array([2.0, 5.0])
+
+        rotate_shifted = RotatedFunction(ShiftedFunction(sphere, shift=shift), matrix=matrix)
+        shift_rotated = ShiftedFunction(RotatedFunction(sphere, matrix=matrix), shift=shift)
+
+        assert rotate_shifted(x) != shift_rotated(x)
+
+    def test_three_layer_chain_with_zero_noise_matches_the_inner_composition(self):
+        shift = np.array([2.0, 3.0])
+        matrix = np.array([[0.0, -1.0], [1.0, 0.0]])
+        inner = RotatedFunction(ShiftedFunction(sphere, shift=shift), matrix=matrix)
+        chained = NoisyFunction(inner, scale=0.0, seed=0)
+
+        x = np.array([3.0, -2.0])
+        assert np.isclose(chained(x), inner(x))
+
+    def test_three_layer_chain_preserves_name_and_docstring(self):
+        chained = NoisyFunction(
+            RotatedFunction(ShiftedFunction(sphere, shift=np.array([1.0, 1.0])), matrix=np.eye(2)),
+            scale=0.1,
+            seed=0,
+        )
+        assert chained.__name__ == sphere.__name__
+        assert chained.__doc__ == sphere.__doc__
+
+    def test_three_layer_chain_still_raises_on_invalid_noise_type(self):
+        chained = NoisyFunction(
+            RotatedFunction(ShiftedFunction(sphere, shift=np.array([1.0, 1.0])), matrix=np.eye(2)),
+            noise_type="not_a_real_type",
+        )
+        with pytest.raises(ValueError):
+            chained(np.zeros(2))

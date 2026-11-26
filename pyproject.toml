@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "banana-bench"
-version = "0.2.0"
+version = "0.3.0"
 description = "A collection of 70+ standard mathematical benchmark functions for testing and evaluating optimization algorithms."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = "MIT"
 authors = [
     {name = "AK Rahul", email = "ak-rahul@users.noreply.github.com"}
@@ -34,10 +34,11 @@ classifiers = [
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering",
     "Topic :: Scientific/Engineering :: Mathematics",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
@@ -66,11 +67,15 @@ dev = [
     "pytest-cov>=4.0.0",
     "ruff>=0.6.0",
     "mypy>=1.0.0,<3.0.0",
+    "build>=1.0.0",
+    "twine>=4.0.0",
+    "rust-just>=1.40.0",
     "matplotlib>=3.3.0",
     "tqdm>=4.65.0",
     "joblib>=1.2.0",
     "scipy>=1.7.0",
     "plotly>=5.0.0",
+    "optuna>=3.0.0",
 ]
 docs = [
     "sphinx>=5.0.0",
@@ -82,6 +87,7 @@ all = [
     "joblib>=1.2.0",
     "scipy>=1.7.0",
     "plotly>=5.0.0",
+    "optuna>=3.0.0",
 ]
 
 [project.urls]
@@ -101,7 +107,7 @@ bananabench = ["py.typed"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py39"
+target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I"]
@@ -111,7 +117,7 @@ ignore = ["E203", "E501", "F541", "E722", "E731"]
 "__init__.py" = ["F401", "F403"]
 "bananabench/metadata.py" = ["F401", "F403", "F405"]
 "bananabench/functions.py" = ["E203"]
-"bananabench/visualization.py" = ["E722", "F811", "F841", "F401"]
+"bananabench/visualization.py" = ["E722", "F841", "F401"]
 "bananabench/benchmarking.py" = ["F401", "F541"]
 "bananabench/cli.py" = ["F401"]
 "bananabench/utils.py" = ["F401"]

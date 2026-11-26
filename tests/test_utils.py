@@ -37,6 +37,15 @@ class TestNormalizeBounds:
         with pytest.raises(ValueError):
             normalize_bounds([], 3)
 
+    def test_dimension_mismatched_per_dim_bounds_raises_rather_than_silently_dropping_data(self):
+        # A 3-element per-dimension bounds list requested at dim=2 (e.g. plotting a
+        # function whose actual default_dim is 3, like holzman1's
+        # [(0.1, 100), (0, 25.6), (0, 5)], in 2D without an explicit bounds override)
+        # must raise -- silently replicating just the first pair and discarding the
+        # rest was a real bug (see CHANGELOG.md).
+        with pytest.raises(ValueError):
+            normalize_bounds([(0.1, 100), (0, 25.6), (0, 5)], 2)
+
 
 class TestGenerateRandomPoint:
     @pytest.mark.parametrize("method", ["uniform", "normal", "center_biased"])

@@ -2,6 +2,7 @@
 Tests for bananabench.benchmarking: BenchmarkRunner and quick_benchmark.
 """
 
+import csv
 import tempfile
 from pathlib import Path
 
@@ -9,7 +10,12 @@ import numpy as np
 import pytest
 
 from bananabench import multiobjective as mo
-from bananabench.benchmarking import BenchmarkRunner, MOBenchmarkRunner, quick_benchmark
+from bananabench.benchmarking import (
+    BenchmarkRunner,
+    MOBenchmarkRunner,
+    compare_algorithms,
+    quick_benchmark,
+)
 
 
 def simple_optimizer(func, bounds, max_iter=50):
@@ -33,6 +39,18 @@ def simple_optimizer(func, bounds, max_iter=50):
 def zero_optimizer(func, bounds, **kwargs):
     """Deterministic optimizer that always returns the origin, for reproducibility tests."""
     return np.zeros(len(bounds)), func(np.zeros(len(bounds)))
+
+
+def far_optimizer(func, bounds, **kwargs):
+    """Deterministic optimizer that returns each bound's upper edge -- a worse result than
+    zero_optimizer for every function in the suite, for comparison-ranking tests."""
+    x = np.array([b[1] for b in bounds])
+    return x, func(x)
+
+
+def failing_optimizer(func, bounds, **kwargs):
+    """Optimizer that never succeeds, for zero-successful-runs tests."""
+    return None, None
 
 
 class TestBenchmarkRunnerInit:
@@ -151,6 +169,29 @@ class TestSaveResults:
         with pytest.raises(ValueError):
             runner.save_results("out.xyz", format="xyz")
 
+    def test_save_csv_with_mixed_success_and_failure_results(self):
+        # A run mixing successes and failures produces result dicts with different
+        # key sets (run_single's exception branch returns fewer keys than a
+        # successful run), so fieldnames must be the union across every result --
+        # csv.DictWriter raises ValueError if any row has a key outside fieldnames.
+        runner = BenchmarkRunner(failing_optimizer, verbose=False, show_progress=False)
+        runner.run_suite(functions=["sphere"])
+
+        good_runner = BenchmarkRunner(zero_optimizer, verbose=False, show_progress=False)
+        good_runner.run_suite(functions=["beale"])
+        runner.results.extend(good_runner.results)
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".csv") as f:
+            filepath = Path(f.name)
+        try:
+            runner.save_results(filepath, format="csv")  # must not raise
+            with open(filepath, newline="") as saved:
+                rows = list(csv.DictReader(saved))
+            assert len(rows) == 2
+            assert {"sphere", "beale"} == {row["function"] for row in rows}
+        finally:
+            filepath.unlink()
+
 
 class TestSummaryStats:
     def test_reports_success_counts_and_error_stats(self):
@@ -166,6 +207,46 @@ class TestSummaryStats:
         runner = BenchmarkRunner(simple_optimizer, verbose=False)
         stats = runner.get_summary_stats()
         assert stats == {"n_results": 0, "n_successful": 0}
+
+
+class TestCompareAlgorithms:
+    def test_rejects_fewer_than_two_runners(self):
+        runner = BenchmarkRunner(zero_optimizer, algorithm_name="Solo", verbose=False)
+        runner.run_suite(functions=["sphere"])
+        with pytest.raises(ValueError):
+            compare_algorithms([runner])
+
+    def test_ranks_lower_error_first(self):
+        good = BenchmarkRunner(zero_optimizer, algorithm_name="Good", verbose=False)
+        good.run_suite(functions=["sphere", "ackley"])
+
+        bad = BenchmarkRunner(far_optimizer, algorithm_name="Bad", verbose=False)
+        bad.run_suite(functions=["sphere", "ackley"])
+
+        table = compare_algorithms([bad, good])  # deliberately passed worse-first
+        # Good's row must appear before Bad's row in the rendered table.
+        assert table.index("Good") < table.index("Bad")
+
+    def test_zero_successful_runs_sorts_last_and_does_not_crash(self):
+        good = BenchmarkRunner(zero_optimizer, algorithm_name="Good", verbose=False)
+        good.run_suite(functions=["sphere"])
+
+        failing = BenchmarkRunner(failing_optimizer, algorithm_name="Failing", verbose=False)
+        failing.run_suite(functions=["sphere"])
+
+        table = compare_algorithms([failing, good])
+        assert table.index("Good") < table.index("Failing")
+        assert "no successful runs" in table
+
+    def test_output_mentions_every_algorithm_name(self):
+        good = BenchmarkRunner(zero_optimizer, algorithm_name="AlphaAlgo", verbose=False)
+        good.run_suite(functions=["sphere"])
+        bad = BenchmarkRunner(far_optimizer, algorithm_name="BetaAlgo", verbose=False)
+        bad.run_suite(functions=["sphere"])
+
+        table = compare_algorithms([good, bad])
+        assert "AlphaAlgo" in table
+        assert "BetaAlgo" in table
 
 
 def test_quick_benchmark():
@@ -222,6 +303,23 @@ class TestMORunSingle:
         result = runner.run_single("zdt1", dim=5, n_points=20, reference_point=np.array([2.0, 2.0]))
         assert result["hypervolume"] >= 0.0
 
+    def test_algorithm_exception_returns_failure_dict_instead_of_raising(self):
+        def failing_mo(func, bounds, n_objectives, **kwargs):
+            raise RuntimeError("mo boom")
+
+        runner = MOBenchmarkRunner(failing_mo, verbose=False, seed=1)
+        result = runner.run_single("zdt1", dim=5)
+        assert result["function"] == "zdt1"
+        assert result["success"] is False
+        assert result["status"] == "exception"
+        assert "mo boom" in result["error_message"]
+
+    def test_successful_result_is_marked_success(self):
+        runner = MOBenchmarkRunner(random_search_mo, verbose=False, seed=1)
+        result = runner.run_single("zdt1", dim=5, n_points=20)
+        assert result["success"] is True
+        assert result["status"] == "success"
+
 
 class TestMORunSuite:
     def test_runs_every_zdt_function_by_default(self):
@@ -234,3 +332,20 @@ class TestMORunSuite:
         results = runner.run_suite(functions=["zdt1", "zdt2"], n_points=10)
         assert len(results) == 2
         assert len(runner.results) == 2
+
+    def test_one_failing_function_does_not_abort_the_rest_of_the_suite(self):
+        # A single bad algorithm call must not take down the whole batch --
+        # run_single isolates exceptions the same way BenchmarkRunner.run_single
+        # does, so run_suite (which has no try/except of its own around the
+        # run_single call) still returns a result for every requested function.
+        def flaky_mo(func, bounds, n_objectives, **kwargs):
+            if len(bounds) == 30:  # zdt1's default_dim -- fail only this one
+                raise RuntimeError("mo boom")
+            return random_search_mo(func, bounds, n_objectives, **kwargs)
+
+        runner = MOBenchmarkRunner(flaky_mo, verbose=False, seed=1)
+        results = runner.run_suite(functions=["zdt1", "zdt4"], n_points=10)  # zdt4 default_dim=10
+        assert len(results) == 2
+        by_name = {r["function"]: r for r in results}
+        assert by_name["zdt1"]["success"] is False
+        assert by_name["zdt4"]["success"] is True

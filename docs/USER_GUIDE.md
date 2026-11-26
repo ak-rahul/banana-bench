@@ -36,6 +36,26 @@ bounds_5d = get_bounds('ackley', dim=5)
 | `get_function_info(name)` | Returns metadata for specific function |
 | `get_bounds(name, dim=None)` | Returns bounds for given dimension |
 | `get_function_list()` | Returns formatted string with all functions |
+| `query_functions(...)` | Returns function names matching a combination of `properties` tags |
+
+### Querying by Mathematical Properties
+
+Rather than hand-filtering `BENCHMARK_SUITE` for functions with a given combination of
+properties, `query_functions()` does it declaratively:
+
+```python
+from bananabench import query_functions
+
+# Every non-separable, multimodal, scalable function
+names = query_functions(separable=False, unimodal=False, scalable=True)
+
+# Every convex function, regardless of separability/modality
+convex_names = query_functions(convex=True)
+```
+
+Each parameter is `True` (require the tag), `False` (require its opposite tag), or `None`
+(don't filter on that axis, the default). `scalable=False` means the `scalable` tag is
+*absent* (fixed-dimension) — there's no separate "non-scalable" tag in the schema.
 
 ## 🔄 Function Wrappers
 
@@ -77,6 +97,31 @@ from scipy.spatial.transform import Rotation
 matrix = Rotation.from_euler('z', 45, degrees=True).as_matrix()
 rotated_rastrigin = RotatedFunction(rastrigin, matrix=matrix)
 ```
+
+### Composing Wrappers
+
+Since each wrapper is itself just a callable, they stack by nesting — combine noise, a
+shifted optimum, and a rotated landscape into one function:
+
+```python
+from bananabench import sphere, NoisyFunction, ShiftedFunction, RotatedFunction
+
+shift = [2.0, 3.0]
+matrix = [[0, -1], [1, 0]]  # 90-degree rotation
+
+stressed_sphere = NoisyFunction(
+    RotatedFunction(ShiftedFunction(sphere, shift=shift), matrix=matrix),
+    scale=0.05,
+)
+```
+
+**Order matters.** `RotatedFunction(ShiftedFunction(f, shift), matrix)` evaluates
+`f(matrix @ x - shift)` (shift applied in the *original* coordinate frame, then rotated),
+while `ShiftedFunction(RotatedFunction(f, matrix), shift)` evaluates `f(matrix @ (x - shift))`
+(shift applied in the *already-rotated* frame) — these are different functions in general, so
+pick the nesting order that matches what you're actually modeling. This composability isn't
+limited to the bundled suite either: since every wrapper just takes `Callable[[np.ndarray],
+float]`, it works identically on your own research function.
 
 ---
 
@@ -181,15 +226,123 @@ print(discrete_sphere([1.2, 2.8])) # Evaluates sphere([1.0, 3.0])
 ### Comparing Multiple Algorithms
 
 ```python
+from bananabench import compare_algorithms
+
 algorithms = {
     'SimulatedAnnealing': simulated_annealing,
     'GeneticAlgorithm': genetic_algorithm
 }
 
+runners = []
 for name, algo in algorithms.items():
     runner = BenchmarkRunner(algo, algorithm_name=name)
-    results = runner.run_suite()
-    runner.save_results(f'{name}_results.csv')
+    runner.run_suite()
+    runner.save_results(f'{name}_results.csv')  # still useful for raw per-run data
+    runners.append(runner)
+
+# One readable side-by-side table instead of eyeballing separate CSVs
+print(compare_algorithms(runners))
+```
+
+`compare_algorithms()` ranks runners by mean error (best first); an algorithm with zero
+successful runs always sorts last rather than raising an error.
+
+### Ranking Constrained Results
+
+`g_suite`/`engineering` functions return `(objective, inequality_violations, equality_violations)`
+rather than a single float, so "lower objective wins" isn't a safe ranking rule on its own -- an
+infeasible point with a great objective value is not actually a good solution.
+`bananabench.constraints` implements the standard feasibility rule (Deb, 2000) that most published
+results on these suites already rely on:
+
+```python
+from bananabench import g_suite
+from bananabench.constraints import feasibility_compare, is_feasible
+
+candidate_a = g_suite.g01(x_a)  # (objective, inequality_violations, equality_violations)
+candidate_b = g_suite.g01(x_b)
+
+print(is_feasible(candidate_a[1], candidate_a[2]))  # True/False
+
+# -1 if candidate_a is preferred, 1 if candidate_b is preferred, 0 on an exact tie
+winner = feasibility_compare(candidate_a, candidate_b)
+```
+
+Feasible solutions always beat infeasible ones; between two feasible solutions the lower objective
+wins; between two infeasible solutions the smaller total constraint violation wins.
+
+### Integration with Optuna
+
+Any `BENCHMARK_SUITE` function plugs directly into Optuna's `objective(trial) -> float` interface --
+see `examples/10_optuna_integration.py` for a full script. The short version:
+
+```python
+import optuna
+from bananabench import metadata
+from bananabench.utils import normalize_bounds
+
+info = metadata.get_function_info('rastrigin')
+bounds = normalize_bounds(info['bounds'], dim=2)
+
+def objective(trial):
+    x = [trial.suggest_float(f'x{i}', lo, hi) for i, (lo, hi) in enumerate(bounds)]
+    return info['function'](x)
+
+study = optuna.create_study(direction='minimize')
+study.optimize(objective, n_trials=200)
+```
+
+Requires Optuna (`pip install optuna`); it's not a `bananabench` dependency.
+
+---
+
+## 🔀 Multi-Objective Benchmarking
+
+`BenchmarkRunner` assumes a single scalar cost, which doesn't fit multi-objective problems --
+`MOBenchmarkRunner` is the counterpart for those, run against the bundled ZDT suite
+(`zdt1`-`zdt4`, `zdt6`).
+
+A multi-objective algorithm has a different signature than a single-objective one: it takes the
+number of objectives and returns a whole population of candidate solutions, not a single best
+point.
+
+```python
+from bananabench import MOBenchmarkRunner
+import numpy as np
+
+def random_search_mo(func, bounds, n_objectives, n_points=100, seed=None):
+    # X: (n_points, dim) decision vectors: F: (n_points, n_objectives) objective values
+    rng = np.random.default_rng(seed)
+    bounds_array = np.array(bounds)
+    lo, hi = bounds_array[:, 0], bounds_array[:, 1]
+    X = lo + rng.random((n_points, len(bounds))) * (hi - lo)
+    F = np.array([func(x) for x in X])
+    return X, F
+
+runner = MOBenchmarkRunner(random_search_mo, algorithm_name='RandomSearch', seed=42)
+results = runner.run_suite(functions=['zdt1', 'zdt2'], n_points=200)
+
+for r in results:
+    print(f"{r['function']}: IGD={r['igd']:.4f}, hypervolume={r.get('hypervolume', 'N/A')}")
+```
+
+Each result dict carries `igd` (Inverted Generational Distance to the true Pareto front -- lower
+is better, 0.0 means every reference point was reached exactly), `hypervolume` (2-objective
+problems only, since every ZDT problem is bi-objective), `n_solutions`, `n_nondominated`, and
+`time`. If your algorithm raises for a given function, that function's result instead carries
+`status='exception'`, `success=False`, and `error_message` -- one failing function doesn't abort
+the rest of the suite, so you don't need to wrap `run_suite()` in your own `try`/`except`.
+
+### Working with the Pareto Front Directly
+
+For custom quality metrics, or to plot the true front against your algorithm's approximation:
+
+```python
+from bananabench.multiobjective import get_pareto_front, non_dominated_front, igd
+
+true_front = get_pareto_front('zdt1')          # (n_points, 2) array, sorted by f1
+my_front = non_dominated_front(F)              # filter your algorithm's F down to non-dominated points
+quality = igd(my_front, true_front)
 ```
 
 ---

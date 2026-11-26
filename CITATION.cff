@@ -4,8 +4,8 @@ authors:
   - family-names: "Rahul"
     given-names: "AK"
 title: "banana-bench: A Python Package for Optimization Algorithm Evaluation"
-version: 0.1.0
-date-released: 2026-08-16
+version: 0.3.0
+date-released: 2026-11-26
 url: "https://github.com/ak-rahul/banana-bench"
 repository-code: "https://github.com/ak-rahul/banana-bench"
 license: MIT

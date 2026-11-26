@@ -31,8 +31,9 @@ __license__ = "MIT"
 
 import warnings
 
-from . import cec, g_suite, gradients, multiobjective, plotly_viz
-from .benchmarking import BenchmarkRunner, MOBenchmarkRunner, quick_benchmark
+from . import cec, constraints, engineering, g_suite, gradients, multiobjective, plotly_viz
+from .benchmarking import BenchmarkRunner, MOBenchmarkRunner, compare_algorithms, quick_benchmark
+from .constraints import constraint_violation, feasibility_compare, is_feasible
 from .functions import (
     ackley,
     beale,
@@ -117,6 +118,7 @@ from .metadata import (
     get_bounds,
     get_function_info,
     get_function_list,
+    query_functions,
 )
 from .utils import (
     calculate_distance_to_optimum,
@@ -241,6 +243,7 @@ __all__ = [
     "get_function_info",
     "get_bounds",
     "get_function_list",
+    "query_functions",
     "normalize_bounds",
     "generate_random_point",
     "check_bounds",
@@ -254,6 +257,7 @@ __all__ = [
     "BenchmarkRunner",
     "MOBenchmarkRunner",
     "quick_benchmark",
+    "compare_algorithms",
     "BenchmarkWrapper",
     "NoisyFunction",
     "ShiftedFunction",
@@ -263,6 +267,11 @@ __all__ = [
     "g_suite",
     "cec",
     "multiobjective",
+    "engineering",
+    "constraints",
+    "constraint_violation",
+    "is_feasible",
+    "feasibility_compare",
 ]
 
 if __visualization_available__:

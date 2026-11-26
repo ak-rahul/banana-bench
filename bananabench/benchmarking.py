@@ -328,7 +328,10 @@ class BenchmarkRunner:
                 }
 
                 if self.verbose:
-                    marker = "✓" if agg_result["error_mean"] < 1.0 else " "
+                    # ASCII only: this prints to whatever stream the caller has, and a
+                    # non-ASCII marker crashes with UnicodeEncodeError on legacy
+                    # codepages (e.g. Windows cp1252 when stdout is redirected).
+                    marker = "*" if agg_result["error_mean"] < 1.0 else " "
                     print(
                         f"{func_name:<25} | {agg_result['dimension']:3d} | "
                         f"{agg_result['best_cost']:12.6f} | "
@@ -461,7 +464,21 @@ class BenchmarkRunner:
         if format == "csv":
             with open(filepath, "w", newline="") as f:
                 if self.results:
-                    writer = csv.DictWriter(f, fieldnames=self.results[0].keys())
+                    # A run mixing successes and failures produces heterogeneous result
+                    # dicts (run_single's exception/bounds_error/invalid_result branches
+                    # return fewer keys than a successful run's), so fieldnames must be
+                    # the union across every result, not just the first one's keys --
+                    # DictWriter raises ValueError on any row with a key outside
+                    # fieldnames, and a fieldnames list based on a single result can't
+                    # anticipate keys introduced only by a different result's status.
+                    fieldnames: List[str] = []
+                    seen = set()
+                    for result in self.results:
+                        for key in result:
+                            if key not in seen:
+                                seen.add(key)
+                                fieldnames.append(key)
+                    writer = csv.DictWriter(f, fieldnames=fieldnames)
                     writer.writeheader()
                     writer.writerows(self.results)
         elif format == "json":
@@ -597,9 +614,25 @@ class MOBenchmarkRunner:
         if self.seed is not None:
             np.random.seed(self.seed)
 
+        # Isolate one function's failure from the rest of the suite, mirroring
+        # BenchmarkRunner.run_single -- without this, run_suite (which calls
+        # run_single once per function with no try/except of its own) would let a
+        # single bad algorithm call take down the entire batch instead of just
+        # that one function's result.
         start_time = time.time()
-        X, F = self.algorithm(func, bounds, n_objectives, **algorithm_kwargs)
-        elapsed = time.time() - start_time
+        try:
+            X, F = self.algorithm(func, bounds, n_objectives, **algorithm_kwargs)
+            elapsed = time.time() - start_time
+        except Exception as e:
+            return {
+                "function": function_name,
+                "dimension": dim,
+                "algorithm": self.algorithm_name,
+                "status": "exception",
+                "error_message": str(e),
+                "time": float(time.time() - start_time),
+                "success": False,
+            }
 
         F = np.asarray(F, dtype=float)
         front = non_dominated_front(F)
@@ -614,6 +647,8 @@ class MOBenchmarkRunner:
             "n_nondominated": int(front.shape[0]),
             "igd": igd_value,
             "time": float(elapsed),
+            "status": "success",
+            "success": True,
         }
 
         if n_objectives == 2:
@@ -670,13 +705,21 @@ class MOBenchmarkRunner:
             self.results.append(result)
 
             if self.verbose:
-                hv_str = (
-                    f"{result['hypervolume']:12.6f}" if "hypervolume" in result else f"{'N/A':>12}"
-                )
-                print(
-                    f"{result['function']:<10} | {result['dimension']:4d} | "
-                    f"{result['igd']:12.6f} | {hv_str} | {result['time']:6.2f}s"
-                )
+                if result.get("success", True) is False:
+                    print(
+                        f"{result['function']:<10} | {result['dimension']:4d} | "
+                        f"{'FAILED':>12} | {'N/A':>12} | {result['time']:6.2f}s"
+                    )
+                else:
+                    hv_str = (
+                        f"{result['hypervolume']:12.6f}"
+                        if "hypervolume" in result
+                        else f"{'N/A':>12}"
+                    )
+                    print(
+                        f"{result['function']:<10} | {result['dimension']:4d} | "
+                        f"{result['igd']:12.6f} | {hv_str} | {result['time']:6.2f}s"
+                    )
 
         if self.verbose:
             print("=" * 70)
@@ -743,3 +786,72 @@ def quick_benchmark(
     )
     results = runner.run_suite(functions=function_names, **algorithm_kwargs)
     return results
+
+
+def compare_algorithms(runners: List["BenchmarkRunner"]) -> str:
+    """
+    Build a side-by-side comparison table across multiple benchmarked algorithms.
+
+    Each runner must have already had ``run_suite()`` called at least once, so
+    ``get_summary_stats()`` has results to summarize. This is the direct
+    replacement for looping over runners and saving separate result files by
+    hand (see USER_GUIDE.md's "Comparing Multiple Algorithms") -- it produces
+    one readable table instead.
+
+    Parameters
+    ----------
+    runners : list of BenchmarkRunner
+        At least two runners, each already benchmarked via ``run_suite()``.
+
+    Returns
+    -------
+    str
+        A formatted comparison table, one row per algorithm, ranked by mean
+        error ascending (best first). An algorithm with zero successful runs
+        has no error to rank by, so it always sorts last.
+
+    Raises
+    ------
+    ValueError
+        If fewer than two runners are given -- there's nothing to compare
+        with only one.
+
+    Examples
+    --------
+    >>> runner_a = BenchmarkRunner(algo_a, algorithm_name='AlgoA')
+    >>> runner_a.run_suite(functions=['sphere', 'ackley'])
+    >>> runner_b = BenchmarkRunner(algo_b, algorithm_name='AlgoB')
+    >>> runner_b.run_suite(functions=['sphere', 'ackley'])
+    >>> print(compare_algorithms([runner_a, runner_b]))
+    """
+    if len(runners) < 2:
+        raise ValueError("compare_algorithms needs at least 2 runners to compare.")
+
+    pairs = [(runner.algorithm_name, runner.get_summary_stats()) for runner in runners]
+    pairs.sort(
+        key=lambda pair: (
+            pair[1].get("n_successful", 0) == 0,
+            pair[1].get("error_mean", float("inf")),
+        )
+    )
+
+    lines = [
+        "=" * 90,
+        "Algorithm Comparison",
+        "=" * 90,
+        f"{'Algorithm':<25} | {'Success Rate':>12} | {'Error Mean':>12} | "
+        f"{'Error Median':>13} | {'Time Mean':>10}",
+        "-" * 90,
+    ]
+    for name, stats in pairs:
+        if stats.get("n_successful", 0) == 0:
+            lines.append(f"{name:<25} | {'no successful runs':^56}")
+            continue
+        lines.append(
+            f"{name:<25} | {stats['success_rate'] * 100:>11.1f}% | "
+            f"{stats['error_mean']:>12.6g} | {stats['error_median']:>13.6g} | "
+            f"{stats['time_mean']:>9.3f}s"
+        )
+    lines.append("=" * 90)
+
+    return "\n".join(lines)

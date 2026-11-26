@@ -1,6 +1,23 @@
-name: Code Quality
+name: ✨ Code Quality
 
-on: [push, pull_request, workflow_dispatch]
+# Skip runs whose changes can't affect lint, formatting or types (docs, metadata,
+# examples). A push or PR that also touches anything else still runs. scripts/ is
+# linted here, so it isn't ignored. Keep this list in sync with test.yml's.
+on:
+  push:
+    paths-ignore: &ignored
+      - 'docs/**'
+      - '**/*.md'
+      - 'examples/**'
+      - 'justfile'
+      - 'CITATION.cff'
+      - '.readthedocs.yaml'
+      - '.github/dependabot.yml'
+      - '.github/workflows/publish.yml'
+      - '.github/workflows/test.yml'
+  pull_request:
+    paths-ignore: *ignored
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -11,28 +28,29 @@ concurrency:
 
 jobs:
   quality:
+    name: 🔍 Lint, format & type check
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v7
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
+    - name: 🐍 Set up Python 3.12
+      uses: actions/setup-python@v7
       with:
         python-version: '3.12'
         cache: 'pip'
 
-    - name: Install dependencies
+    - name: 📦 Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install ".[dev]"
 
-    - name: Lint (ruff)
-      run: ruff check bananabench tests
+    - name: 🧹 Lint (ruff)
+      run: ruff check bananabench tests scripts
 
-    - name: Check formatting (ruff)
-      run: ruff format --check bananabench tests
+    - name: 🎨 Check formatting (ruff format)
+      run: ruff format --check bananabench tests scripts
 
-    - name: Type check (mypy)
+    - name: 🔎 Type check (mypy)
       run: mypy bananabench
-

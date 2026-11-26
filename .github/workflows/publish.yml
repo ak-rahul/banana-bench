@@ -1,60 +1,186 @@
-name: Publish to PyPI
+name: 🚀 Release & Publish to PyPI
 
+# Fully automatic: when a push to main changes pyproject.toml's version to one that
+# has no `v<version>` tag yet, this workflow tests the commit, publishes it to PyPI,
+# then creates the tag and the GitHub Release, with notes taken from CHANGELOG.md.
+# Pushes that don't change the version skip every job after `detect`.
+#
+# Don't tag or create Releases by hand. To release: bump the version in
+# pyproject.toml and CITATION.cff, date the CHANGELOG.md section, and merge to main.
 on:
-  release:
-    types: [published]
+  push:
+    branches: [main]
+    paths: [pyproject.toml]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+# Never run two releases at once, and never cancel one that's in flight.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
+  detect:
+    name: 🔖 Detect version bump
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.check.outputs.release }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: 🐍 Set up Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: 🔍 Compare version with existing tags
+        id: check
+        run: |
+          version="$(python scripts/dev.py version)"
+          tag="v${version}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            echo "${tag} already exists; nothing to release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Refuse to release a version lower than an existing one. Compared with
+          # PEP 440 ordering (`packaging`), so 0.4.0 correctly ranks above 0.4.0rc1,
+          # which plain `sort -V` gets wrong.
+          python -m pip install --quiet packaging
+          latest="$(git tag -l 'v*' | python -c '
+          import sys
+          from packaging.version import InvalidVersion, Version
+          versions = []
+          for tag in sys.stdin.read().split():
+              try:
+                  versions.append(Version(tag[1:]))
+              except InvalidVersion:
+                  pass
+          print(max(versions) if versions else "")
+          ')"
+          if [ -n "${latest}" ] && python -c "import sys; from packaging.version import Version as V; sys.exit(V('${version}') > V('${latest}'))"; then
+            echo "::error::Version ${version} is not higher than the latest release ${latest}."
+            exit 1
+          fi
+
+          echo "New version ${tag} (previous: v${latest:-none}); releasing."
+          echo "release=true" >> "$GITHUB_OUTPUT"
+
+      - name: 📝 Check CHANGELOG and CITATION, generate release notes
+        if: steps.check.outputs.release == 'true'
+        run: python scripts/dev.py release-notes --output release-notes.md
+
+      - name: 📤 Upload release notes
+        if: steps.check.outputs.release == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-notes
+          path: release-notes.md
+
   test:
-    name: Run tests on release commit
+    name: 🧪 Test release commit
+    needs: detect
+    if: needs.detect.outputs.release == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v7
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: 🐍 Set up Python 3.12
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: 'pip'
 
-      - name: Install dependencies
+      - name: 📦 Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
-      - name: Run tests
+      - name: 🧪 Run test suite
         run: pytest tests/ -v
 
   pypi-publish:
-    name: Upload to PyPI
-    needs: test
+    name: 📦 Build & upload to PyPI
+    needs: [detect, test]
+    if: needs.detect.outputs.release == 'true'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v7
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: 🐍 Set up Python 3.12
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: 'pip'
 
-      - name: Install build dependencies
+      - name: 🛠️ Install build tooling
         run: |
           python -m pip install --upgrade pip
           pip install build twine
 
-      - name: Build package
+      - name: 🏗️ Build sdist and wheel
         run: python -m build
 
-      - name: Validate package metadata
-        run: twine check dist/*
+      - name: ✅ Validate package metadata
+        run: twine check --strict dist/*
 
-      - name: Publish to PyPI
+      - name: 📤 Upload distributions
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+
+      # skip-existing keeps a re-run idempotent: if PyPI succeeded but the
+      # GitHub Release step failed, re-running the workflow finishes the job.
+      - name: 🚀 Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
+
+  github-release:
+    name: 🏷️ Tag & create GitHub Release
+    needs: [detect, pypi-publish]
+    if: needs.detect.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 📥 Download distributions
+        uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+
+      - name: 📥 Download release notes
+        uses: actions/download-artifact@v8
+        with:
+          name: release-notes
+
+      - name: 🏷️ Create tag and release from CHANGELOG
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.detect.outputs.version }}
+        run: |
+          prerelease=""
+          if [[ "${VERSION}" =~ [a-zA-Z] ]]; then
+            prerelease="--prerelease"   # e.g. 0.4.0rc1
+          fi
+          gh release create "v${VERSION}" dist/* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --target "${GITHUB_SHA}" \
+            --title "v${VERSION}" \
+            --notes-file release-notes.md \
+            ${prerelease}

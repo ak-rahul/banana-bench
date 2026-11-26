@@ -72,13 +72,14 @@ def normalize_bounds(
     if len(bounds_raw) == 2 and not isinstance(bounds_raw[0], (tuple, list)):
         return [(float(bounds_raw[0]), float(bounds_raw[1]))] * dim
 
-    # Case 5: Try first element replication
-    try:
-        if isinstance(bounds_raw[0], (tuple, list)) and len(bounds_raw[0]) == 2:
-            return [tuple(bounds_raw[0])] * dim
-    except (IndexError, TypeError):
-        pass
-
+    # Deliberately no further fallback: silently replicating just the first
+    # (min, max) pair when bounds_raw has more elements that don't fit any case
+    # above (e.g. an explicit per-dimension bounds list whose length doesn't match
+    # `dim`) would discard the rest of bounds_raw without telling the caller --
+    # this was a real bug (plot_function_2d('holzman1') silently swapped its
+    # documented [(0.1, 100), (0, 25.6), (0, 5)] bounds for [(0.1, 100), (0.1,
+    # 100)] instead of raising, since it always requests dim=2 for a function
+    # whose actual default_dim is 3). Raising here surfaces the mismatch instead.
     raise ValueError(
         f"Cannot normalize bounds format: {bounds_raw}. "
         f"Expected format: [(min, max), ...] or (min, max) for {dim} dimensions"
