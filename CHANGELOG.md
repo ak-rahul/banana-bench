@@ -12,6 +12,140 @@ functionality from that history carries forward unchanged.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-27
+
+### Added
+- New `bananabench.tracking` module. `TrackedFunction(func, max_evals=None,
+  record_trace=True)` wraps any objective and counts evaluations. It records the
+  best value and point seen so far, and an anytime best-so-far trace: the first
+  evaluation plus every strict improvement, which is what data profiles and
+  runtime ECDFs need. With `max_evals` it raises `BudgetExhausted` instead of
+  performing evaluation `max_evals + 1`. It is purely observational (returns
+  exactly `func(x)`) and composes with `wrappers`/`cec`.
+- `BenchmarkRunner(max_evals=..., record_trace=False, verify=True)`. Algorithms
+  now receive a `TrackedFunction`, so every run reports `n_evals` and
+  `max_evals`.
+  - `max_evals` is a fixed count or a function of the dimension, e.g.
+    `lambda d: 10_000 * d`. When an algorithm hits the budget, the runner
+    catches `BudgetExhausted` and scores the best point evaluated so far
+    (`status="budget_exhausted"`, still a success), so algorithms don't need
+    to handle budgets themselves.
+  - `record_trace=True` stores each run's `trace` and `first_cost`. JSON
+    output keeps them; CSV leaves them out.
+  - `quick_benchmark` accepts `max_evals` and `verify`. The `run_suite`
+    verbose table, `print_summary` and `compare_algorithms` show evaluation
+    counts.
+- New `bananabench.analysis` module, which compares solvers the way the
+  optimization literature does, across a set of problems rather than by one
+  aggregate number. Every definition follows its source paper.
+  - `performance_profile` (Dolan & Moré 2002) and `data_profile` (Moré & Wild
+    2009, convergence test `f(x0) - f(x) >= (1 - tau)(f(x0) - f_L)`, budgets in
+    simplex gradients).
+  - `expected_running_time` (ERT, COCO's aRT; Auger & Hansen 2005) and
+    `runtime_ecdf` (COCO). `COCO_TARGETS` holds COCO's 51 default targets from
+    1e2 to 1e-8.
+  - `evaluations_to_target`.
+  - Adapters `histories_from_runners`, `ert_from_runners` and
+    `performance_profile_from_runners` build these inputs from runners that used
+    `record_trace=True`.
+  - The pure functions take plain mappings, so they also work on data from
+    outside `bananabench`.
+- `analysis.statistical_comparison(runners, metric="error", alpha=0.05)`
+  implements Demšar's (2006) procedure for comparing algorithms over multiple
+  problems:
+  - average ranks;
+  - the Friedman test with the Iman–Davenport correction;
+  - the Nemenyi critical difference;
+  - pairwise Wilcoxon signed-rank tests with Holm's (1979) correction.
+
+  It returns structured results plus a text `report`. It requires SciPy,
+  available through the new `stats` extra (`pip install 'banana-bench[stats]'`).
+- `visualization.plot_performance_profile`, `plot_data_profile` and
+  `plot_runtime_ecdf`: step plots in a colorblind-safe palette (Okabe & Ito).
+- DTLZ1–DTLZ7 (Deb, Thiele, Laumanns & Zitzler 2005), the standard scalable
+  many-objective suite, in `multiobjective`.
+  - Each takes `n_objectives` (M, default 3) and uses the paper's
+    `n = M + k - 1` defaults (`k` = 5, 10, 10, 10, 10, 10, 20).
+  - Every formula was cross-checked against two independent implementations:
+    pymoo (agreement to 2.4e-15 relative error at random points for M = 2–4)
+    and Platypus.
+  - New registries `DTLZ_SUITE` and `MO_SUITE` (ZDT + DTLZ), with helpers
+    `get_mo_function`, `get_mo_default_dim` and `get_mo_n_objectives`.
+  - `get_pareto_front(name, n_points, n_objectives)` returns the true front
+    for each.
+- `multiobjective.das_dennis(n_objectives, n_partitions)`: uniformly spaced
+  reference points on the simplex (Das & Dennis 1998).
+- `MOBenchmarkRunner(n_objectives=..., max_evals=...)` runs DTLZ problems and
+  counts evaluations. A run that hits its budget is scored on the
+  non-dominated set of everything it evaluated. Hypervolume is now reported
+  for every problem, not only bi-objective ones.
+- CLI: `--suite multiobjective` covers DTLZ, and a new `--objectives M` flag
+  sets the number of objectives, e.g.
+  `banana-bench --function dtlz2 --suite multiobjective --objectives 3 --values ...`.
+- Examples:
+  - `examples/11_budgeted_benchmarking.py`: equal evaluation budgets, with
+    verification catching a misreported result.
+  - `examples/12_performance_profiles.py`: ERT, performance and data profiles,
+    a runtime ECDF and a statistical comparison.
+  - `examples/13_many_objective_dtlz.py`: DTLZ with three and five objectives,
+    exact and Monte Carlo hypervolume.
+
+  The user guide gains sections on evaluation budgets, profiles, statistical
+  comparison and many-objective problems, and `docs/BENCHMARK_FUNCTIONS.md` a
+  DTLZ section.
+
+### Changed
+- `BenchmarkRunner` now verifies results by default. It re-evaluates the
+  benchmark function at the reported `best_x` (not counted against the budget)
+  and scores that value. The algorithm's own figure is kept as
+  `reported_cost`, and `cost_mismatch=True` flags a report that disagrees.
+  Previously a buggy or dishonest algorithm could report any `best_cost`, and
+  its `error` was computed from it unchecked. Numbers change only for
+  algorithms whose reported cost was wrong; `verify=False` restores the old
+  behavior.
+- `multiobjective.hypervolume` supports any number of objectives instead of
+  raising `NotImplementedError` above two. It is exact by default: a sweep for
+  2 objectives, slicing for 3, and the WFG algorithm (While, Bradstreet & Barone
+  2012) for more. `method="monte_carlo"` gives a seeded estimate for large
+  fronts, and `method="auto"` (default) switches to it beyond 100 points in 4
+  or more objectives. Results were cross-checked against pymoo's independent
+  implementation for 2–5 objectives. Two-objective results are unchanged.
+- `get_mo_function_list()` and `MOBenchmarkRunner.run_suite()` (with no
+  `functions`) now include the DTLZ problems as well as ZDT.
+- CI: `test.yml` and `quality.yml` are merged into one `ci.yml` workflow,
+  ending in a single `✅ CI passed` job for branch protection to require. A
+  first `changes` job skips the test matrix and lint for docs-only changes
+  through job-level conditions instead of `paths-ignore`. A workflow skipped by
+  a path filter reports no status, which left required checks waiting forever;
+  a skipped job reports success.
+- CI runs on pushes to `main`, on pull requests, and manually, instead of on
+  every push to every branch. A pull request branch previously ran everything
+  twice, once for the push and once for the pull request.
+
+### Removed
+- Python 3.10 support. `requires-python` is now `>=3.11`. Python 3.10 reached
+  end-of-life in October 2026, and dropping it follows the SPEC 0 policy NumPy
+  and SciPy use. Python 3.15 is added to the classifiers and the CI matrix,
+  which now tests 3.11–3.15 on Linux, Windows and macOS.
+
+### Fixed
+- `holzman1` returned wrong values, and NaN for points inside its own
+  documented domain, so its documented minimum `f(50, 25, 1.5) = 0` was never
+  reached. It's the Gulf Research and Development function (Moré, Garbow &
+  Hillstrom 1981, problem 11), and the earlier transcription had four errors:
+  unsquared residuals, a missing minus sign and absolute value in the
+  exponent, and a `0.1*i` target instead of `i/100`. It now uses the source
+  formula with 99 residuals, cross-checked against SciPy's global-optimization
+  benchmark `Gulf` and Burkardt's TEST_OPT. Values differ from 0.3.0 and
+  earlier. Those values were wrong, so any results recorded against them
+  should be regenerated. It also raises `ValueError` for input that isn't
+  3-dimensional, like every other fixed-dimension function.
+- `BenchmarkRunner.run_suite`'s verbose table, `print_summary`, and
+  `MOBenchmarkRunner`'s verbose table still printed tiny values with plain
+  `:12.6f`, so `gear`'s ~2.7e-12 known minimum showed as `0.000000`. They now
+  share a single formatter with every CLI `--list` table and
+  `metadata.get_function_list()`, which previously each kept their own copy.
+
 ## [0.3.0] - 2026-11-26
 
 ### Added

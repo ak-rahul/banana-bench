@@ -4,7 +4,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/banana-bench)](https://pypi.org/project/banana-bench/)
 [![Downloads](https://pepy.tech/badge/banana-bench)](https://pepy.tech/project/banana-bench)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/ak-rahul/banana-bench/blob/main/LICENSE.md)
-[![Build Status](https://github.com/ak-rahul/banana-bench/actions/workflows/quality.yml/badge.svg)](https://github.com/ak-rahul/banana-bench/actions/workflows/quality.yml)
+[![Build Status](https://github.com/ak-rahul/banana-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/ak-rahul/banana-bench/actions/workflows/ci.yml)
 [![Docs](https://app.readthedocs.org/projects/banana-bench/badge/?version=latest)](https://banana-bench.readthedocs.io/en/latest/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
@@ -29,15 +29,21 @@ Full documentation is published at **[banana-bench.readthedocs.io](https://banan
 - **Constrained Suites**: The complete CEC2006 G-suite (`g01`-`g24`) and four classic
   engineering design problems (`spring_design`, `pressure_vessel`, `welded_beam`, `gear_train`),
   plus Deb's feasibility rule (`feasibility_compare`) for ranking constrained results.
-- **Multi-Objective Suite**: ZDT1-4 and ZDT6 with analytic Pareto fronts, IGD and hypervolume
-  scoring via `MOBenchmarkRunner`.
+- **Multi- and Many-Objective Suites**: ZDT1-4 and ZDT6, plus DTLZ1-7 for any number of
+  objectives, with true Pareto fronts, Das-Dennis reference points, IGD, and exact hypervolume in
+  any number of objectives, all scored by `MOBenchmarkRunner`.
 - **Rich Metadata**: Access bounds, dimensions, known minima programmatically, and query
   functions by property (`query_functions(separable=False, unimodal=False)`).
 - **Wrappers & CEC-Style Composition**: Noise, shift, rotation, and CEC 2017/2020-style
   composition on any callable, including your own functions.
-- **Benchmarking Tools**: Automated testing with `BenchmarkRunner`, serial or parallel, and
-  side-by-side ranking with `compare_algorithms`.
-- **Visualization**: 2D/3D plots, convergence tracking, and heatmaps (Matplotlib or Plotly).
+- **Fair Benchmarking**: `BenchmarkRunner` counts every evaluation, enforces evaluation budgets
+  (`max_evals=lambda d: 1000 * d`), and re-checks each reported result against `f(best_x)`, serial
+  or parallel.
+- **Performance Analysis**: Dolan-More performance profiles, More-Wild data profiles, expected
+  running time and COCO-style runtime ECDFs, plus Friedman / Wilcoxon-Holm significance tests
+  (`bananabench.analysis`).
+- **Visualization**: 2D/3D plots, convergence tracking, heatmaps, and profile/ECDF plots
+  (Matplotlib or Plotly).
 - **Command-Line Interface**: `banana-bench --list`, `--info`, and `--function` across every suite.
 - **Minimal Core Dependencies**: Only NumPy is required; everything else is optional.
 
@@ -61,6 +67,7 @@ pip install "banana-bench[viz]"          # Matplotlib plotting
 pip install "banana-bench[interactive]"  # Plotly plotting
 pip install "banana-bench[parallel]"     # parallel benchmarking (joblib)
 pip install "banana-bench[progress]"     # progress bars (tqdm)
+pip install "banana-bench[stats]"        # statistical comparison (SciPy)
 pip install "banana-bench[all]"          # everything above, plus SciPy and Optuna
 ```
 

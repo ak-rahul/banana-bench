@@ -23,8 +23,11 @@ try:
         plot_algorithm_comparison,
         plot_benchmark_summary,
         plot_convergence,
+        plot_data_profile,
         plot_function_2d,
         plot_function_3d,
+        plot_performance_profile,
+        plot_runtime_ecdf,
         plot_search_heatmap,
         plot_trajectory_2d,
         save_plot,
@@ -188,4 +191,41 @@ class TestColormaps:
     def test_plot_function_3d_accepts_each_colormap(self, cmap):
         fig = plot_function_3d("sphere", cmap=cmap, resolution=10)
         assert fig is not None
+        plt.close(fig)
+
+
+class TestAnalysisPlots:
+    """Step plots for bananabench.analysis outputs."""
+
+    CURVES = {"A": np.array([0.2, 0.6, 1.0]), "B": np.array([0.5, 0.5, 0.8])}
+
+    def test_performance_profile(self, tmp_path):
+        path = tmp_path / "pp.png"
+        fig = plot_performance_profile(np.array([1.0, 2.0, 4.0]), self.CURVES, save_path=str(path))
+        ax = fig.axes[0]
+        assert ax.get_xscale() == "log"
+        assert len(ax.get_lines()) == 2
+        assert [t.get_text() for t in ax.get_legend().get_texts()] == ["A", "B"]
+        assert path.exists()
+        plt.close(fig)
+
+    def test_data_profile_title_includes_tau(self):
+        fig = plot_data_profile(np.array([0.0, 1.0, 2.0]), self.CURVES, tau=1e-3)
+        assert "0.001" in fig.axes[0].get_title()
+        assert fig.axes[0].get_xscale() == "linear"
+        plt.close(fig)
+
+    def test_runtime_ecdf(self):
+        fig = plot_runtime_ecdf(np.array([1.0, 10.0, 100.0]), self.CURVES)
+        ax = fig.axes[0]
+        assert ax.get_xscale() == "log"
+        assert "dimension" in ax.get_xlabel()
+        plt.close(fig)
+
+    def test_end_to_end_from_analysis(self):
+        from bananabench.analysis import performance_profile
+
+        taus, profiles = performance_profile({"A": {"p": 1.0, "q": 3.0}, "B": {"p": 2.0, "q": 1.0}})
+        fig = plot_performance_profile(taus, profiles)
+        assert len(fig.axes[0].get_lines()) == 2
         plt.close(fig)

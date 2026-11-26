@@ -553,19 +553,29 @@ def kowalik(x: np.ndarray) -> float:
 
 def holzman1(x: np.ndarray) -> float:
     """
-    Holzman function #1.
+    Holzman function #1 (the Gulf Research and Development function).
+    f(x) = sum_{i=1}^{m} [exp(-|y_i - x1|^x2 / x0) - t_i]^2, with t_i = i/100,
+    y_i = 25 + (-50 ln t_i)^(2/3), and m = 99 residuals (the source allows 3 <= m <= 100;
+    99 matches SciPy's global-optimization benchmark ``Gulf`` and Burkardt's TEST_OPT).
     Domain: 0.1 ≤ x0 ≤ 100, 0 ≤ x1 ≤ 25.6, 0 ≤ x2 ≤ 5.
     Dimension: 3.
-    Global minimum: f(50,25,1.5) = 0 at x = (50, 25, 1.5).
+    Global minimum: f(50,25,1.5) = 0 at x = (50, 25, 1.5). It is exact: at that point
+    |y_i - 25|^1.5 / 50 = -ln t_i, so every residual is exp(ln t_i) - t_i = 0.
+
+    Source: Moré, Garbow & Hillstrom (1981), "Testing Unconstrained Optimization
+    Software", ACM Trans. Math. Softw. 7(1):17-41, problem 11 (variables x1..x3 there
+    are x0..x2 here). Versions before 0.4.0 transcribed this from the MVF report [1]
+    with four errors: the residuals weren't squared, the exponent's minus sign and
+    absolute value were missing (a negative base with a fractional power returned NaN
+    inside the documented domain), and the target term was 0.1*i instead of i/100.
     """
     x = np.asarray(x, dtype=float)
+    _check_dim(x, 3, "holzman1")
     x0, x1, x2 = x
-    total = 0.0
-    for i in range(100):
-        ui = 25 + pow(-50.0 * np.log(0.01 * (i + 1)), 2.0 / 3.0)
-        exponent = min(float((ui - x1) ** x2 / x0), 700.0)  # overflow guard
-        total += -0.1 * (i + 1) + np.exp(exponent)
-    return total
+    t = np.arange(1, 100, dtype=float) / 100.0
+    y = 25.0 + (-50.0 * np.log(t)) ** (2.0 / 3.0)
+    residuals = np.exp(-(np.abs(y - x1) ** x2) / x0) - t
+    return float(np.sum(residuals**2))
 
 
 def holzman2(x: np.ndarray) -> float:

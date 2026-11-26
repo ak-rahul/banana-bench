@@ -273,7 +273,7 @@ class TestEngineeringSuite:
 
 
 class TestMultiobjectiveSuite:
-    def test_list_shows_every_zdt_function(self):
+    def test_list_shows_every_mo_function(self):
         result = run_cli("--list", "--suite", "multiobjective")
         assert result.returncode == 0
         for name in mo.get_mo_function_list():
@@ -306,3 +306,63 @@ class TestMultiobjectiveSuite:
     def test_unknown_function_fails_gracefully(self):
         result = run_cli("--function", "zdt5", "--suite", "multiobjective", "--values", "1")
         assert result.returncode != 0
+
+
+class TestDTLZCli:
+    def test_evaluate_dtlz2_on_its_front(self):
+        # Distance variables at 0.5 put DTLZ2 on the unit sphere.
+        result = run_cli(
+            "--function", "dtlz2", "--suite", "multiobjective", "--values", *["0.5"] * 12
+        )
+        assert result.returncode == 0, result.stderr
+        objectives = json.loads(result.stdout)["result"]["objectives"]
+        assert len(objectives) == 3
+        assert sum(f * f for f in objectives) == pytest.approx(1.0)
+
+    def test_objectives_flag_sets_m(self):
+        result = run_cli(
+            "--function",
+            "dtlz1",
+            "--suite",
+            "multiobjective",
+            "--objectives",
+            "5",
+            "--values",
+            *["0.5"] * 9,
+        )
+        assert result.returncode == 0, result.stderr
+        objectives = json.loads(result.stdout)["result"]["objectives"]
+        assert len(objectives) == 5
+        assert sum(objectives) == pytest.approx(0.5)
+
+    def test_objectives_rejected_for_zdt(self):
+        result = run_cli(
+            "--function",
+            "zdt1",
+            "--suite",
+            "multiobjective",
+            "--objectives",
+            "3",
+            "--values",
+            "0.5",
+            "0",
+            "0",
+        )
+        assert result.returncode != 0
+        assert "bi-objective" in result.stderr
+
+    def test_objectives_requires_multiobjective_suite(self):
+        result = run_cli("--function", "ackley", "--objectives", "3", "--values", "0", "0")
+        assert result.returncode != 0
+        assert "--suite multiobjective" in result.stderr
+
+    def test_too_few_values_fails_gracefully(self):
+        result = run_cli("--function", "dtlz2", "--suite", "multiobjective", "--values", "0.5")
+        assert result.returncode != 0
+        assert "Traceback" not in result.stderr
+
+    def test_metadata_reports_scalable_objectives(self):
+        result = run_cli("--metadata", "dtlz7", "--suite", "multiobjective")
+        data = json.loads(result.stdout)
+        assert data["scalable_objectives"] is True
+        assert data["k"] == 20

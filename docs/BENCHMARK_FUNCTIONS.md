@@ -668,10 +668,21 @@ print(f'result: {result}')
 **Optimal Point:** `x = [50, 25, 1.5]`
 
 #### Description
-Holzman function #1.
+Holzman function #1 (the Gulf Research and Development function).
+f(x) = sum_{i=1}^{m} [exp(-|y_i - x1|^x2 / x0) - t_i]^2, with t_i = i/100,
+y_i = 25 + (-50 ln t_i)^(2/3), and m = 99 residuals (the source allows 3 <= m <= 100;
+99 matches SciPy's global-optimization benchmark ``Gulf`` and Burkardt's TEST_OPT).
 Domain: 0.1 ≤ x0 ≤ 100, 0 ≤ x1 ≤ 25.6, 0 ≤ x2 ≤ 5.
 Dimension: 3.
-Global minimum: f(50,25,1.5) = 0 at x = (50, 25, 1.5).
+Global minimum: f(50,25,1.5) = 0 at x = (50, 25, 1.5). It is exact: at that point
+|y_i - 25|^1.5 / 50 = -ln t_i, so every residual is exp(ln t_i) - t_i = 0.
+
+Source: Moré, Garbow & Hillstrom (1981), "Testing Unconstrained Optimization
+Software", ACM Trans. Math. Softw. 7(1):17-41, problem 11 (variables x1..x3 there
+are x0..x2 here). Versions before 0.4.0 transcribed this from the MVF report [1]
+with four errors: the residuals weren't squared, the exponent's minus sign and
+absolute value were missing (a negative base with a fractional power returned NaN
+inside the documented domain), and the target term was 0.1*i instead of i/100.
 
 #### Code Example
 ```python
@@ -2835,6 +2846,180 @@ import numpy as np
 
 x = np.zeros(10)
 f1, f2 = mo.zdt6(x)
+```
+
+---
+
+## Many-Objective Suite (DTLZ)
+
+The DTLZ suite (`dtlz1`-`dtlz7`; Deb, Thiele, Laumanns & Zitzler 2005) scales to any number of objectives M: each function takes `n_objectives` (default 3) and has `n = M + k - 1` variables. Generated from `multiobjective.DTLZ_SUITE`; every formula was cross-checked against pymoo and Platypus. See `bananabench.multiobjective`.
+
+Total functions: 7
+
+| Function | Default Dim (M = 3) | k | Properties |
+|----------|---------------------|---|------------|
+| [dtlz1](#dtlz1) | 7D | 5 | multi-objective, scalable, scalable-objectives, continuous, multimodal, linear-front |
+| [dtlz2](#dtlz2) | 12D | 10 | multi-objective, scalable, scalable-objectives, continuous, differentiable, concave-front |
+| [dtlz3](#dtlz3) | 12D | 10 | multi-objective, scalable, scalable-objectives, continuous, multimodal, concave-front |
+| [dtlz4](#dtlz4) | 12D | 10 | multi-objective, scalable, scalable-objectives, continuous, differentiable, concave-front, biased |
+| [dtlz5](#dtlz5) | 12D | 10 | multi-objective, scalable, scalable-objectives, continuous, differentiable, degenerate-front |
+| [dtlz6](#dtlz6) | 12D | 10 | multi-objective, scalable, scalable-objectives, continuous, degenerate-front |
+| [dtlz7](#dtlz7) | 22D | 20 | multi-objective, scalable, scalable-objectives, continuous, disconnected-front |
+
+### dtlz1
+
+**Default Dimension:** 7 (M + k - 1, k = 5)
+**Objectives:** 3 by default (any M >= 2)
+**Properties:** multi-objective, scalable, scalable-objectives, continuous, multimodal, linear-front
+
+#### Description
+DTLZ1: linear Pareto front sum(f) = 0.5, with a highly multimodal g
+(11^k - 1 local fronts).
+Dimension: n = M + k - 1, default k = 5. Bounds [0, 1]^n.
+Pareto-optimal: x_M = 0.5 (all distance variables).
+
+#### Code Example
+```python
+from bananabench import multiobjective as mo
+import numpy as np
+
+x = np.full(7, 0.5)
+f = mo.dtlz1(x, n_objectives=3)  # 3 objectives
+```
+
+---
+
+### dtlz2
+
+**Default Dimension:** 12 (M + k - 1, k = 10)
+**Objectives:** 3 by default (any M >= 2)
+**Properties:** multi-objective, scalable, scalable-objectives, continuous, differentiable, concave-front
+
+#### Description
+DTLZ2: spherical Pareto front sum(f^2) = 1 in the positive orthant.
+Dimension: n = M + k - 1, default k = 10. Bounds [0, 1]^n.
+Pareto-optimal: x_M = 0.5.
+
+#### Code Example
+```python
+from bananabench import multiobjective as mo
+import numpy as np
+
+x = np.full(12, 0.5)
+f = mo.dtlz2(x, n_objectives=3)  # 3 objectives
+```
+
+---
+
+### dtlz3
+
+**Default Dimension:** 12 (M + k - 1, k = 10)
+**Objectives:** 3 by default (any M >= 2)
+**Properties:** multi-objective, scalable, scalable-objectives, continuous, multimodal, concave-front
+
+#### Description
+DTLZ3: DTLZ2's spherical front with DTLZ1's multimodal g (3^k - 1 local fronts).
+Dimension: n = M + k - 1, default k = 10. Bounds [0, 1]^n.
+Pareto-optimal: x_M = 0.5.
+
+#### Code Example
+```python
+from bananabench import multiobjective as mo
+import numpy as np
+
+x = np.full(12, 0.5)
+f = mo.dtlz3(x, n_objectives=3)  # 3 objectives
+```
+
+---
+
+### dtlz4
+
+**Default Dimension:** 12 (M + k - 1, k = 10)
+**Objectives:** 3 by default (any M >= 2)
+**Properties:** multi-objective, scalable, scalable-objectives, continuous, differentiable, concave-front, biased
+
+#### Description
+DTLZ4: DTLZ2's spherical front with a biased density of solutions
+(position variables mapped through x^alpha, alpha = 100).
+Dimension: n = M + k - 1, default k = 10. Bounds [0, 1]^n.
+Pareto-optimal: x_M = 0.5.
+
+#### Code Example
+```python
+from bananabench import multiobjective as mo
+import numpy as np
+
+x = np.full(12, 0.5)
+f = mo.dtlz4(x, n_objectives=3)  # 3 objectives
+```
+
+---
+
+### dtlz5
+
+**Default Dimension:** 12 (M + k - 1, k = 10)
+**Objectives:** 3 by default (any M >= 2)
+**Properties:** multi-objective, scalable, scalable-objectives, continuous, differentiable, degenerate-front
+
+#### Description
+DTLZ5: degenerate Pareto front (a curve on the unit sphere) for M >= 3.
+Dimension: n = M + k - 1, default k = 10. Bounds [0, 1]^n.
+Pareto-optimal: x_M = 0.5.
+
+#### Code Example
+```python
+from bananabench import multiobjective as mo
+import numpy as np
+
+x = np.full(12, 0.5)
+f = mo.dtlz5(x, n_objectives=3)  # 3 objectives
+```
+
+---
+
+### dtlz6
+
+**Default Dimension:** 12 (M + k - 1, k = 10)
+**Objectives:** 3 by default (any M >= 2)
+**Properties:** multi-objective, scalable, scalable-objectives, continuous, degenerate-front
+
+#### Description
+DTLZ6: DTLZ5's degenerate curve with a harder g = sum(x_M^0.1).
+Dimension: n = M + k - 1, default k = 10. Bounds [0, 1]^n.
+Pareto-optimal: x_M = 0.
+
+#### Code Example
+```python
+from bananabench import multiobjective as mo
+import numpy as np
+
+x = np.full(12, 0.5)
+f = mo.dtlz6(x, n_objectives=3)  # 3 objectives
+```
+
+---
+
+### dtlz7
+
+**Default Dimension:** 22 (M + k - 1, k = 20)
+**Objectives:** 3 by default (any M >= 2)
+**Properties:** multi-objective, scalable, scalable-objectives, continuous, disconnected-front
+
+#### Description
+DTLZ7: disconnected Pareto front (2^(M-1) regions).
+f_i = x_i for i < M; g = 1 + 9/k * sum(x_M); h = M - sum_{i<M} f_i/(1+g) (1 + sin(3 pi f_i));
+f_M = (1 + g) h.
+Dimension: n = M + k - 1, default k = 20. Bounds [0, 1]^n.
+Pareto-optimal: x_M = 0 (g = 1).
+
+#### Code Example
+```python
+from bananabench import multiobjective as mo
+import numpy as np
+
+x = np.full(22, 0.5)
+f = mo.dtlz7(x, n_objectives=3)  # 3 objectives
 ```
 
 ---

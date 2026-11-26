@@ -151,6 +151,30 @@ plt.savefig('summary.png', dpi=300)
 plt.show()
 ```
 
+### Performance Profiles, Data Profiles and Runtime ECDFs
+Step plots for the outputs of `bananabench.analysis`: one line per solver, in a colorblind-safe
+palette (Okabe & Ito) with distinct line styles.
+
+```python
+from bananabench.analysis import (
+    data_profile, histories_from_runners, performance_profile_from_runners, runtime_ecdf,
+)
+from bananabench.visualization import (
+    plot_data_profile, plot_performance_profile, plot_runtime_ecdf,
+)
+
+# runners: BenchmarkRunner instances created with record_trace=True
+taus, perf = performance_profile_from_runners(runners, target=1e-6)
+plot_performance_profile(taus, perf, save_path='performance_profile.png')  # log ratio axis
+
+histories, f_opt, dims = histories_from_runners(runners)
+alphas, data = data_profile(histories, dims, tau=1e-3)
+plot_data_profile(alphas, data, tau=1e-3, save_path='data_profile.png')
+
+budgets, ecdf = runtime_ecdf(histories, f_opt, dims=dims)
+plot_runtime_ecdf(budgets, ecdf, save_path='runtime_ecdf.png')  # evaluations / dimension, log axis
+```
+
 ## Advanced Features
 
 ### Multi-Format Plot Export

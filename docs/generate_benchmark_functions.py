@@ -1,6 +1,6 @@
 """
 Regenerate docs/BENCHMARK_FUNCTIONS.md from BENCHMARK_SUITE, g_suite.G_SUITE,
-engineering.ENGINEERING_SUITE, multiobjective.ZDT_SUITE, and functions.py.
+engineering.ENGINEERING_SUITE, multiobjective.ZDT_SUITE/DTLZ_SUITE, and functions.py.
 
 This is a reusable, idempotent generator (safe to re-run any time), not a one-off
 migration script: BENCHMARK_FUNCTIONS.md is a *derived* view of these registries,
@@ -136,9 +136,12 @@ def _engineering_section(name: str, entry: dict) -> str:
 
 def _mo_section(name: str, entry: dict) -> str:
     dim = entry["default_dim"]
+    dtlz = name in mo.DTLZ_SUITE
     lines = [f"### {name}", ""]
-    lines.append(f"**Default Dimension:** {dim}")
-    lines.append(f"**Objectives:** {entry['n_objectives']}")
+    lines.append(f"**Default Dimension:** {dim}" + (f" (M + k - 1, k = {entry['k']})" if dtlz else ""))
+    lines.append(
+        f"**Objectives:** {entry['n_objectives']}" + (" by default (any M >= 2)" if dtlz else "")
+    )
     lines.append(f"**Properties:** {', '.join(entry['properties'])}")
     lines.append("")
     lines.append("#### Description")
@@ -149,8 +152,12 @@ def _mo_section(name: str, entry: dict) -> str:
     lines.append("from bananabench import multiobjective as mo")
     lines.append("import numpy as np")
     lines.append("")
-    lines.append(f"x = np.zeros({dim})")
-    lines.append(f"f1, f2 = mo.{name}(x)")
+    if dtlz:
+        lines.append(f"x = np.full({dim}, 0.5)")
+        lines.append(f"f = mo.{name}(x, n_objectives=3)  # 3 objectives")
+    else:
+        lines.append(f"x = np.zeros({dim})")
+        lines.append(f"f1, f2 = mo.{name}(x)")
     lines.append("```")
     lines.append("")
     lines.append("---")
@@ -250,15 +257,37 @@ def generate() -> str:
     lines.append("")
     lines.append("| Function | Default Dim | Objectives | Properties |")
     lines.append("|----------|--------------|------------|------------|")
-    for name in mo.get_mo_function_list():
+    for name in mo.ZDT_SUITE:
         entry = mo.ZDT_SUITE[name]
         lines.append(
             f"| [{name}](#{name}) | {entry['default_dim']}D | {entry['n_objectives']} | "
             f"{', '.join(entry['properties'])} |"
         )
     lines.append("")
-    for name in mo.get_mo_function_list():
+    for name in mo.ZDT_SUITE:
         lines.append(_mo_section(name, mo.ZDT_SUITE[name]))
+
+    lines.append("## Many-Objective Suite (DTLZ)")
+    lines.append("")
+    lines.append(
+        "The DTLZ suite (`dtlz1`-`dtlz7`; Deb, Thiele, Laumanns & Zitzler 2005) scales to any "
+        "number of objectives M: each function takes `n_objectives` (default 3) and has "
+        "`n = M + k - 1` variables. Generated from `multiobjective.DTLZ_SUITE`; every formula "
+        "was cross-checked against pymoo and Platypus. See `bananabench.multiobjective`."
+    )
+    lines.append("")
+    lines.append(f"Total functions: {len(mo.DTLZ_SUITE)}")
+    lines.append("")
+    lines.append("| Function | Default Dim (M = 3) | k | Properties |")
+    lines.append("|----------|---------------------|---|------------|")
+    for name, entry in mo.DTLZ_SUITE.items():
+        lines.append(
+            f"| [{name}](#{name}) | {entry['default_dim']}D | {entry['k']} | "
+            f"{', '.join(entry['properties'])} |"
+        )
+    lines.append("")
+    for name, entry in mo.DTLZ_SUITE.items():
+        lines.append(_mo_section(name, entry))
 
     lines.append("## Spelling Aliases")
     lines.append("")

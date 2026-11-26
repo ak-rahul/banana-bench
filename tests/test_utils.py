@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from bananabench.utils import (
+    _format_value,
     calculate_distance_to_optimum,
     check_bounds,
     clip_to_bounds,
@@ -141,3 +142,32 @@ class TestCalculateDistanceToOptimum:
         optima = [np.array([10.0, 10.0]), np.array([1.0, 0.0])]
         distance = calculate_distance_to_optimum(point, optima)
         assert np.isclose(distance, 1.0)
+
+
+class TestFormatValue:
+    """The single number formatter behind every text table (CLI --list,
+    get_function_list(), BenchmarkRunner's verbose output)."""
+
+    def test_ordinary_value_is_fixed_point(self):
+        assert _format_value(3.14159, precision=2) == "3.14"
+
+    def test_zero_stays_fixed_point(self):
+        assert _format_value(0.0, precision=4) == "0.0000"
+
+    def test_tiny_nonzero_value_switches_to_scientific(self):
+        # gear's known minimum (~2.7e-12) must not display as an exact zero.
+        assert _format_value(2.7e-12, precision=6) == "2.700e-12"
+
+    def test_negative_value(self):
+        assert _format_value(-1.5, precision=3) == "-1.500"
+
+    def test_large_value_stays_fixed_point(self):
+        assert _format_value(6059.714335, precision=2) == "6059.71"
+
+    def test_width_right_aligns(self):
+        assert _format_value(1.0, width=8, precision=2) == "    1.00"
+        assert _format_value(2.7e-12, width=12, precision=6) == "   2.700e-12"
+
+    def test_non_finite_values(self):
+        assert _format_value(float("inf"), width=5) == "  inf"
+        assert _format_value(float("nan")) == "nan"

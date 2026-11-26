@@ -17,7 +17,14 @@ References
 import numpy as np
 import pytest
 
-from bananabench import BENCHMARK_SUITE, fraudenstein_roth, freudenstein_roth, maxmod, schwefel2_21
+from bananabench import (
+    BENCHMARK_SUITE,
+    fraudenstein_roth,
+    freudenstein_roth,
+    holzman1,
+    maxmod,
+    schwefel2_21,
+)
 from bananabench.metadata import get_all_functions, get_bounds
 
 # Functions whose true minimum is achieved at more than one point. Each is
@@ -33,18 +40,7 @@ _MULTI_MINIMA_POINTS = {
 # below, not an exact known-minimum assertion.
 _NO_KNOWN_POINT = {"michalewicz", "langerman", "stretched_v", "watson", "xor", "lennard_jones"}
 
-# holzman1: at its documented optimum (50, 25, 1.5) the shipped implementation
-# returns ~13.74, not 0, and unconstrained search inside its own documented
-# box finds far lower (and even NaN-producing) values. This looks like a real
-# bug in the function body, not a metadata typo — left for a follow-up fix
-# rather than guessing at a corrected formula here. xfail(strict=True) so this
-# starts failing loudly (telling us to update/remove the marker) if the
-# implementation is ever corrected.
-_KNOWN_BROKEN = {"holzman1"}
-
-_SINGLE_POINT_FUNCTIONS = sorted(
-    set(BENCHMARK_SUITE) - set(_MULTI_MINIMA_POINTS) - _NO_KNOWN_POINT - _KNOWN_BROKEN
-)
+_SINGLE_POINT_FUNCTIONS = sorted(set(BENCHMARK_SUITE) - set(_MULTI_MINIMA_POINTS) - _NO_KNOWN_POINT)
 
 # A handful of known_minimum values are literature-rounded approximations
 # rather than exact closed forms; give those a looser tolerance.
@@ -94,15 +90,16 @@ class TestGlobalMinima:
         result = info["function"](np.array(point))
         assert result == pytest.approx(info["known_minimum"], abs=1e-3)
 
-    @pytest.mark.xfail(
-        reason="holzman1 does not reach known_minimum=0 at its documented optimum (50,25,1.5); "
-        "likely an implementation bug, see module docstring",
-        strict=True,
-    )
-    def test_holzman1_known_minimum(self):
-        info = BENCHMARK_SUITE["holzman1"]
-        x = _optimal_point_array(info)
-        assert info["function"](x) == pytest.approx(info["known_minimum"], abs=1e-4)
+    def test_holzman1_finite_and_nonnegative_in_domain(self):
+        """holzman1 is a sum of squares (Moré, Garbow & Hillstrom 1981, problem 11): it must
+        be finite and >= 0 everywhere in its documented domain. Before 0.4.0 it returned NaN
+        for in-domain points and missed its own documented minimum."""
+        bounds = np.array(BENCHMARK_SUITE["holzman1"]["bounds"], dtype=float)
+        rng = np.random.default_rng(0)
+        points = rng.uniform(bounds[:, 0], bounds[:, 1], size=(2000, 3))
+        values = np.array([holzman1(p) for p in points])
+        assert np.all(np.isfinite(values))
+        assert np.all(values >= 0.0)
 
     def test_freudenstein_roth_minimum(self):
         """Freudenstein-Roth: f(5, 4) = 0. Not in BENCHMARK_SUITE, tested directly."""
@@ -204,6 +201,7 @@ class TestDimensionValidation:
             ("gear", 4),
             ("goldstein_price", 2),
             ("himmelblau", 2),
+            ("holzman1", 3),
             ("hosaki", 2),
             ("kowalik", 4),
             ("leon", 2),

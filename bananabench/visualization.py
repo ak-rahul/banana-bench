@@ -1051,3 +1051,160 @@ def animate_trajectory_2d(
             anim.save(str(save_path) + ".gif", writer=writer)
 
     return anim
+
+
+# ---------------------------------------------------------------------------
+# Benchmark analysis plots (performance profiles, data profiles, runtime ECDFs)
+# ---------------------------------------------------------------------------
+
+# Okabe & Ito (2008) colorblind-safe categorical palette, paired with distinct
+# line styles so curves stay distinguishable in grayscale print.
+_SOLVER_COLORS = ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00", "#56B4E9", "#000000"]
+_SOLVER_STYLES = ["-", "--", "-.", ":"]
+
+
+def _plot_step_curves(
+    x: np.ndarray,
+    curves: Dict[str, np.ndarray],
+    xlabel: str,
+    ylabel: str,
+    title: str,
+    log_x: bool,
+    figsize: Tuple[int, int],
+    save_path: Optional[str],
+) -> plt.Figure:
+    _check_matplotlib()
+    fig, ax = plt.subplots(figsize=figsize)
+    x = np.asarray(x, dtype=float)
+    for i, (name, y) in enumerate(curves.items()):
+        ax.step(
+            x,
+            np.asarray(y, dtype=float),
+            where="post",
+            label=name,
+            color=_SOLVER_COLORS[i % len(_SOLVER_COLORS)],
+            linestyle=_SOLVER_STYLES[(i // len(_SOLVER_COLORS)) % len(_SOLVER_STYLES)],
+            linewidth=2,
+        )
+    if log_x:
+        ax.set_xscale("log")
+    ax.set_ylim(-0.02, 1.02)
+    ax.set_xlabel(xlabel, fontsize=12)
+    ax.set_ylabel(ylabel, fontsize=12)
+    ax.set_title(title, fontsize=14, fontweight="bold")
+    ax.grid(True, alpha=0.3)
+    if curves:
+        ax.legend(fontsize=10, loc="lower right")
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    return fig
+
+
+def plot_performance_profile(
+    taus: np.ndarray,
+    profiles: Dict[str, np.ndarray],
+    log_scale: bool = True,
+    title: str = "Performance Profile",
+    figsize: Tuple[int, int] = (10, 6),
+    save_path: Optional[str] = None,
+) -> plt.Figure:
+    """
+    Plot Dolan–Moré performance profiles.
+
+    Parameters
+    ----------
+    taus, profiles
+        Output of :func:`bananabench.analysis.performance_profile` (or
+        ``performance_profile_from_runners``).
+    log_scale : bool, default=True
+        Log-scale the ratio axis, the usual presentation (Dolan & Moré 2002).
+    title, figsize, save_path
+        As for the other plotting functions.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+    """
+    return _plot_step_curves(
+        taus,
+        profiles,
+        xlabel="Performance ratio τ (cost / best cost)",
+        ylabel="Fraction of problems",
+        title=title,
+        log_x=log_scale,
+        figsize=figsize,
+        save_path=save_path,
+    )
+
+
+def plot_data_profile(
+    alphas: np.ndarray,
+    profiles: Dict[str, np.ndarray],
+    tau: Optional[float] = None,
+    title: Optional[str] = None,
+    figsize: Tuple[int, int] = (10, 6),
+    save_path: Optional[str] = None,
+) -> plt.Figure:
+    """
+    Plot Moré–Wild data profiles.
+
+    Parameters
+    ----------
+    alphas, profiles
+        Output of :func:`bananabench.analysis.data_profile`.
+    tau : float, optional
+        Accuracy level used, shown in the default title.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+    """
+    if title is None:
+        title = "Data Profile" + (f" (τ = {tau:g})" if tau is not None else "")
+    return _plot_step_curves(
+        alphas,
+        profiles,
+        xlabel="Budget α (simplex gradients, n + 1 evaluations each)",
+        ylabel="Fraction of problems solved",
+        title=title,
+        log_x=False,
+        figsize=figsize,
+        save_path=save_path,
+    )
+
+
+def plot_runtime_ecdf(
+    budgets: np.ndarray,
+    ecdfs: Dict[str, np.ndarray],
+    per_dimension: bool = True,
+    title: str = "Runtime ECDF",
+    figsize: Tuple[int, int] = (10, 6),
+    save_path: Optional[str] = None,
+) -> plt.Figure:
+    """
+    Plot COCO-style runtime ECDFs on a log budget axis.
+
+    Parameters
+    ----------
+    budgets, ecdfs
+        Output of :func:`bananabench.analysis.runtime_ecdf`.
+    per_dimension : bool, default=True
+        Label the x-axis as evaluations per dimension (pass ``False`` when the
+        ECDF was computed without ``dims``).
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+    """
+    xlabel = "Evaluations / dimension" if per_dimension else "Evaluations"
+    return _plot_step_curves(
+        budgets,
+        ecdfs,
+        xlabel=f"{xlabel} (log scale)",
+        ylabel="Fraction of (problem, target) pairs",
+        title=title,
+        log_x=True,
+        figsize=figsize,
+        save_path=save_path,
+    )
