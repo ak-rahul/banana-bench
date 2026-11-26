@@ -1,6 +1,23 @@
 name: ✨ Code Quality
 
-on: [push, pull_request, workflow_dispatch]
+# Skip runs whose changes can't affect lint, formatting or types (docs, metadata,
+# examples). A push or PR that also touches anything else still runs. scripts/ is
+# linted here, so it isn't ignored. Keep this list in sync with test.yml's.
+on:
+  push:
+    paths-ignore: &ignored
+      - 'docs/**'
+      - '**/*.md'
+      - 'examples/**'
+      - 'justfile'
+      - 'CITATION.cff'
+      - '.readthedocs.yaml'
+      - '.github/dependabot.yml'
+      - '.github/workflows/publish.yml'
+      - '.github/workflows/test.yml'
+  pull_request:
+    paths-ignore: *ignored
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -30,10 +47,10 @@ jobs:
         pip install ".[dev]"
 
     - name: 🧹 Lint (ruff)
-      run: ruff check bananabench tests
+      run: ruff check bananabench tests scripts
 
     - name: 🎨 Check formatting (ruff format)
-      run: ruff format --check bananabench tests
+      run: ruff format --check bananabench tests scripts
 
     - name: 🔎 Type check (mypy)
       run: mypy bananabench

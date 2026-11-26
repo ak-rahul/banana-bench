@@ -1,9 +1,24 @@
 name: 🧪 Tests
 
+# Skip runs whose changes can't affect the package or its tests (docs, metadata,
+# examples, dev tooling). A push or PR that also touches anything else still runs.
+# Keep this list in sync with quality.yml's.
 on:
   push:
+    paths-ignore: &ignored
+      - 'docs/**'
+      - '**/*.md'
+      - 'examples/**'
+      - 'scripts/**'
+      - 'justfile'
+      - 'CITATION.cff'
+      - '.readthedocs.yaml'
+      - '.github/dependabot.yml'
+      - '.github/workflows/publish.yml'
+      - '.github/workflows/quality.yml'
   pull_request:
     branches: [ main ]
+    paths-ignore: *ignored
   workflow_dispatch:
 
 permissions:

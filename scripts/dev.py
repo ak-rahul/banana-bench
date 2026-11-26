@@ -133,8 +133,8 @@ def build() -> int:
 def check() -> int:
     """Run the same gates as CI's quality.yml and test.yml, stopping at the first failure."""
     steps = [
-        (sys.executable, "-m", "ruff", "check", "bananabench", "tests"),
-        (sys.executable, "-m", "ruff", "format", "--check", "bananabench", "tests"),
+        (sys.executable, "-m", "ruff", "check", "bananabench", "tests", "scripts"),
+        (sys.executable, "-m", "ruff", "format", "--check", "bananabench", "tests", "scripts"),
         (sys.executable, "-m", "mypy", "bananabench"),
         (sys.executable, "-m", "pytest", "tests"),
     ]
