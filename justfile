@@ -41,6 +41,10 @@ fmt:
     {{python}} -m ruff format bananabench tests scripts
     {{python}} -m ruff check --fix bananabench tests scripts
 
+# Check CHANGELOG/CITATION are release-ready and preview the auto-generated GitHub Release notes
+release-notes *args:
+    {{python}} scripts/dev.py release-notes {{args}}
+
 # Build the Sphinx HTML docs into docs/_build/html (needs the docs extra)
 docs:
     {{python}} -m sphinx -b html docs docs/_build/html
