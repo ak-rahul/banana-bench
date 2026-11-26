@@ -62,6 +62,30 @@ We use `pytest` for testing. To run the tests:
    pytest --cov=bananabench
    ```
 
+## Development Scripts
+
+Common development chores are wrapped in a [`justfile`](justfile). The
+[`just`](https://github.com/casey/just) command runner is installed with the
+dev extra (`pip install -e ".[dev]"`), and works in PowerShell, cmd, Git Bash,
+macOS, and Linux. Run `just` on its own to list every recipe.
+
+```bash
+just clean            # remove caches (__pycache__, .pytest_cache, .mypy_cache, .ruff_cache)
+                      # and build artifacts (build/, dist/, *.egg-info, coverage files, docs/_build)
+just clean --dry-run  # list what would be removed without deleting anything
+just fmt              # auto-format and apply safe lint fixes
+just test             # run pytest; extra arguments pass through, e.g. `just test -k ackley`
+just check            # ruff, ruff format --check, mypy, and pytest, as CI runs them
+just build            # clean, build the sdist and wheel, then run twine check
+just docs             # build the Sphinx docs into docs/_build/html (needs the docs extra)
+```
+
+The recipes use the project's `.venv` interpreter when one exists, so they
+work without activating it. The logic itself lives in `scripts/dev.py`
+(standard library only), so `python scripts/dev.py clean|build|check` works
+too if you don't have `just`. `clean` never touches `.git` or any virtual
+environment.
+
 ## Code Style
 
 - Run `ruff format bananabench tests` and `ruff check bananabench tests` before committing
