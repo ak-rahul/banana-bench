@@ -811,8 +811,9 @@ def get_function_list():
 
 # Each of these axes is a pair of mutually exclusive tags in BENCHMARK_SUITE's
 # ``properties`` lists (a function carries at most one tag per axis, and may carry
-# none at all if modality/convexity is genuinely undetermined -- see CLAUDE.md's
-# note on only asserting those when derivable). ``scalable`` has no opposite tag
+# none at all if modality/convexity is genuinely undetermined -- those tags are
+# only asserted when derivable from the formula or established in the cited
+# literature). ``scalable`` has no opposite tag
 # (its absence just means fixed-dimension), so it's handled separately below.
 _QUERY_AXES: Dict[str, Tuple[str, str]] = {
     "continuous": ("continuous", "discontinuous"),

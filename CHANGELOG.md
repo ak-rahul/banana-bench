@@ -102,8 +102,21 @@ functionality from that history carries forward unchanged.
   the two without a `try`/`except` of their own. `run_suite`'s verbose
   printer was updated to render a `FAILED` row for these instead of raising
   `KeyError` on the now-absent `igd` key.
+- `README.md`'s feature list now covers the constrained (G-suite,
+  engineering), multi-objective (ZDT), CEC-style composition, and CLI
+  features, and lists every optional install extra rather than only `viz`.
 
 ### Fixed
+- The Sphinx docs (`docs/conf.py`) hardcoded `release = '0.1.0'`, so the
+  published documentation showed the wrong version. It now reads the version
+  from the installed package metadata, keeping `pyproject.toml` as the single
+  source of truth.
+- `BenchmarkRunner.run_suite(verbose=True)` (including the README quick
+  start) and `visualization.batch_plot_functions` crashed
+  with `UnicodeEncodeError` whenever stdout used a legacy codepage, e.g.
+  Windows with output redirected to a file or pipe, because their progress
+  lines printed a non-ASCII check mark. They now print ASCII only (`*` marks
+  a run whose mean error is below 1.0).
 - `utils.normalize_bounds` had a silent-data-loss fallback: for a bounds list
   that didn't match any documented format (e.g. an explicit per-dimension
   bounds list whose length doesn't match the requested `dim`), it replicated
@@ -122,9 +135,9 @@ functionality from that history carries forward unchanged.
   share the same fallback: switch to scientific notation whenever
   fixed-point rounding would display a nonzero value as all-zero.
 - CLI `SUITE_CHOICES` was ordered `(scalar, constrained, multiobjective,
-  engineering)` in code, so `--help` displayed that order, while every doc
-  describing `--suite` (`CLAUDE.md`, `ROADMAP.md`, `docs/API_REFERENCE.md`)
-  consistently used `{scalar,constrained,engineering,multiobjective}`.
+  engineering)` in code, so `--help` displayed that order, while the
+  documentation (`docs/API_REFERENCE.md`) used
+  `{scalar,constrained,engineering,multiobjective}`.
   Reordered the code to match the documented convention.
 - `visualization.py` had a duplicate `_check_matplotlib()` definition (the
   second silently shadowed the first, byte-identical, so purely dead code);

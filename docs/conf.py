@@ -1,9 +1,21 @@
 # Configuration file for the Sphinx documentation builder.
 
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
+
 project = 'banana-bench'
 copyright = '2026, Ak Rahul'
 author = 'Ak Rahul'
-release = '0.1.0'
+
+# Read the version from the installed package metadata (pyproject.toml is the
+# single source of truth) instead of hardcoding it here, where it previously
+# drifted out of sync. Read the Docs installs the package before building, so
+# the metadata is available there.
+try:
+    release = _pkg_version('banana-bench')
+except PackageNotFoundError:
+    release = 'unknown'
+version = '.'.join(release.split('.')[:2])
 
 extensions = [
     'sphinx.ext.autodoc',

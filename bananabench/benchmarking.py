@@ -328,7 +328,10 @@ class BenchmarkRunner:
                 }
 
                 if self.verbose:
-                    marker = "✓" if agg_result["error_mean"] < 1.0 else " "
+                    # ASCII only: this prints to whatever stream the caller has, and a
+                    # non-ASCII marker crashes with UnicodeEncodeError on legacy
+                    # codepages (e.g. Windows cp1252 when stdout is redirected).
+                    marker = "*" if agg_result["error_mean"] < 1.0 else " "
                     print(
                         f"{func_name:<25} | {agg_result['dimension']:3d} | "
                         f"{agg_result['best_cost']:12.6f} | "

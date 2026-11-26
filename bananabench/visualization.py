@@ -925,14 +925,14 @@ def batch_plot_functions(
                 else:
                     plt.savefig(output_file, format=fmt, bbox_inches="tight")
                 func_files.append(output_file)
-                print(f"✓ Saved: {output_file}")
+                print(f"Saved: {output_file}")
 
             plt.close(fig)
 
         saved_files[func_name] = func_files
 
     print("-" * 60)
-    print(f"✓ Generated {sum(len(f) for f in saved_files.values())} plots total")
+    print(f"Generated {sum(len(f) for f in saved_files.values())} plots total")
 
     return saved_files
 

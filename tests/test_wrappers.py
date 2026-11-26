@@ -78,7 +78,7 @@ class TestChainedWrappers:
     NoisyFunction(RotatedFunction(ShiftedFunction(f, shift), matrix), scale=...) --
     stacking works today but wasn't previously exercised by tests, despite
     "any callable, including your own research function" being a stated
-    differentiator (see ROADMAP.md's wrapper-composability item)."""
+    differentiator."""
 
     def test_shift_then_rotate_finds_the_transformed_optimum(self):
         shift = np.array([2.0, 3.0])

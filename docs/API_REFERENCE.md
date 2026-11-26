@@ -236,8 +236,8 @@ FUNCTION`, `--metadata FUNCTION`, and `--function FUNCTION --values ...` / `--in
 `gear_train`), or `multiobjective.ZDT_SUITE` (`zdt1`-`zdt4`, `zdt6`) respectively. Evaluation
 output is shaped per suite: `scalar` returns a plain number, `constrained`/`engineering` return
 `{"objective": ..., "inequality_violations": [...], "equality_violations": [...]}`, and
-`multiobjective` returns `{"objectives": [f1, f2]}`. Run `banana-bench --help` for the full flag
-reference and examples.
+`multiobjective` returns `{"objectives": [f1, f2]}`. `--version` prints the installed version.
+Run `banana-bench --help` for the full flag reference and examples.
 
 ```bash
 banana-bench --list --suite constrained

@@ -5,9 +5,9 @@ CEC-style composition on a user's own function, not just the bundled suite.
 2017/2020-style shift/rotate/compose problem out of *any* callable that takes
 an ndarray and returns a float -- including a research function you wrote
 yourself, not just `bananabench`'s bundled suite. This is a lighter-weight
-alternative to waiting for real CEC2013/2014/2017 data-file suites to ship
-(still gated on ROADMAP.md's unresolved shift/rotation data-file strategy):
-you get the same shift/rotate/compose *mechanics* today, on any function.
+alternative to waiting for the official CEC2013/2014/2017 suites, which need
+their published shift/rotation data files and aren't bundled yet: you get the
+same shift/rotate/compose *mechanics* today, on any function.
 """
 
 import numpy as np
