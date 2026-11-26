@@ -117,6 +117,12 @@ functionality from that history carries forward unchanged.
   Windows with output redirected to a file or pipe, because their progress
   lines printed a non-ASCII check mark. They now print ASCII only (`*` marks
   a run whose mean error is below 1.0).
+
+### Removed
+- Python 3.9 support. `requires-python` is now `>=3.10`. Python 3.9 reached
+  end-of-life in October 2025, and GitHub's current Ubuntu runner image no
+  longer ships a 3.9 build. CI now tests Python 3.10 through 3.14, and 3.13
+  and 3.14 are added to the package classifiers.
 - `utils.normalize_bounds` had a silent-data-loss fallback: for a bounds list
   that didn't match any documented format (e.g. an explicit per-dimension
   bounds list whose length doesn't match the requested `dim`), it replicated
