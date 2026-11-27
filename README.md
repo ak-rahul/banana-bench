@@ -40,8 +40,9 @@ Full documentation is published at **[banana-bench.readthedocs.io](https://banan
   (`max_evals=lambda d: 1000 * d`), and re-checks each reported result against `f(best_x)`, serial
   or parallel.
 - **Performance Analysis**: Dolan-More performance profiles, More-Wild data profiles, expected
-  running time and COCO-style runtime ECDFs, plus Friedman / Wilcoxon-Holm significance tests
-  (`bananabench.analysis`).
+  running time and COCO-style runtime ECDFs, Friedman / Wilcoxon-Holm significance tests, and
+  Kudela's center-bias test, which catches optimizers that only do well because most classic
+  functions have their optimum at the center of the box (`bananabench.analysis`).
 - **Visualization**: 2D/3D plots, convergence tracking, heatmaps, and profile/ECDF plots
   (Matplotlib or Plotly).
 - **Command-Line Interface**: `banana-bench --list`, `--info`, and `--function` across every suite.
@@ -68,26 +69,37 @@ pip install "banana-bench[interactive]"  # Plotly plotting
 pip install "banana-bench[parallel]"     # parallel benchmarking (joblib)
 pip install "banana-bench[progress]"     # progress bars (tqdm)
 pip install "banana-bench[stats]"        # statistical comparison (SciPy)
-pip install "banana-bench[all]"          # everything above, plus SciPy and Optuna
+pip install "banana-bench[all]"          # everything above, plus Optuna
 ```
 
 ## 🚀 Quick Start
 
 ```python
 import numpy as np
-from bananabench import ackley, BenchmarkRunner
+from bananabench import BenchmarkRunner, ackley
 
 # 1. Use a single function
-x = np.zeros(5)
-print(f"Ackley(0) = {ackley(x)}")
+print(f"Ackley(0) = {ackley(np.zeros(5))}")
 
-# 2. Run a benchmark suite
-def my_optimizer(func, bounds):
-    # Your optimization logic here...
-    return np.zeros(len(bounds)), 0.0
+# 2. Benchmark an optimizer, here a random search
+def random_search(func, bounds):
+    """Samples until the runner's evaluation budget stops it."""
+    low, high = np.array(bounds).T
+    best_x, best_f = None, np.inf
+    while True:
+        x = np.random.uniform(low, high)
+        fx = func(x)
+        if fx < best_f:
+            best_x, best_f = x, fx
 
-runner = BenchmarkRunner(my_optimizer, "MyAlgo", n_runs=5)
+runner = BenchmarkRunner(random_search, "RandomSearch", n_runs=5,
+                         max_evals=lambda dim: 1000 * dim)
 results = runner.run_suite(functions=['sphere', 'ackley'])
 ```
 
-For detailed usage, see the **[User Guide](https://github.com/ak-rahul/banana-bench/blob/main/docs/USER_GUIDE.md)**.
+The runner counts every evaluation, stops each run at its budget, and scores the best point the
+run evaluated. An optimizer that returns normally is scored on its reported `best_x`, re-checked
+against `f(best_x)`.
+
+For detailed usage, see the **[User Guide](https://github.com/ak-rahul/banana-bench/blob/main/docs/USER_GUIDE.md)**
+and the runnable **[examples](https://github.com/ak-rahul/banana-bench/tree/main/examples)**.

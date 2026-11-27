@@ -108,8 +108,17 @@ functionality from that history carries forward unchanged.
     one of them pulled toward the center, and the test telling them apart.
 
   The user guide gains sections on evaluation budgets, profiles, statistical
-  comparison and many-objective problems, and `docs/BENCHMARK_FUNCTIONS.md` a
-  DTLZ section.
+  comparison, center bias and many-objective problems, and
+  `docs/BENCHMARK_FUNCTIONS.md` a DTLZ section.
+- Documentation site:
+  - an API page generated from the docstrings, so it can't drift from the code;
+  - an Examples page listing all 14 scripts;
+  - the changelog.
+
+  The README and docs quick starts use a real random search under an
+  evaluation budget. The old example returned the origin without evaluating
+  anything, and scored perfectly only because sphere and ackley have their
+  optimum there.
 
 ### Changed
 - `BenchmarkRunner` now verifies results by default. It re-evaluates the

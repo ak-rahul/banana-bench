@@ -125,17 +125,18 @@ Compare multiple algorithms on various metrics using bar charts.
 ```python
 from bananabench.visualization import plot_algorithm_comparison
 
-results = {
+# {algorithm: {function: {metric: value}}}, not the runner's list of result dicts
+comparison = {
     'SimulatedAnnealing': {'sphere': {'error': 0.001, 'time': 1.2}},
     'GeneticAlgorithm': {'sphere': {'error': 0.01, 'time': 0.8}}
 }
 
 # Compare by Error
-plot_algorithm_comparison(results, metric='error')
+plot_algorithm_comparison(comparison, metric='error')
 plt.show()
 
 # Compare by Time
-plot_algorithm_comparison(results, metric='time')
+plot_algorithm_comparison(comparison, metric='time')
 plt.show()
 ```
 
@@ -145,7 +146,8 @@ Generate a comprehensive 4-panel summary of your benchmark results.
 ```python
 from bananabench.visualization import plot_benchmark_summary
 
-# results is a list of dictionaries from BenchmarkRunner
+# runner is a BenchmarkRunner; plot the list its run_suite() returns
+results = runner.run_suite(functions=['sphere', 'ackley', 'rastrigin'])
 fig = plot_benchmark_summary(results)
 plt.savefig('summary.png', dpi=300)
 plt.show()

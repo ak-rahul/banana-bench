@@ -123,7 +123,9 @@ class BenchmarkRunner:
     Parameters
     ----------
     algorithm : callable
-        Optimization algorithm with signature: func, bounds, **kwargs -> (best_x, best_cost)
+        Optimization algorithm with signature
+        ``algorithm(func, bounds, **kwargs) -> (best_x, best_cost)``. ``func`` is a
+        ``tracking.TrackedFunction`` around the benchmark function.
     algorithm_name : str, optional
         Name of the algorithm for reporting
     n_runs : int, default=1
