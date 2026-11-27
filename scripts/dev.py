@@ -12,6 +12,13 @@ Usage::
     python scripts/dev.py check            # lint, format check, type check, tests (as CI)
     python scripts/dev.py release-notes    # current version's CHANGELOG.md section (+ release gate)
     python scripts/dev.py version          # pyproject.toml's version
+    python scripts/dev.py ci-changes ...   # CI: which jobs a push/PR needs (ci.yml)
+    python scripts/dev.py release-check    # CI: is pyproject.toml's version a new release? (publish.yml)
+
+The two ``ci``/``release`` commands hold the logic the workflows used to carry as
+inline shell and Python, so it's linted, type-checked and unit-tested
+(tests/test_dev_script.py) like the rest of the code. Both print their result and,
+when ``GITHUB_OUTPUT`` is set, also append it there as ``key=value`` lines.
 
 ``clean`` never touches the ``.git`` directory or any virtual environment
 (any directory containing ``pyvenv.cfg``, plus the usual ``.venv``/``venv``
@@ -21,7 +28,9 @@ names), so it is safe to run inside an activated environment.
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import glob
+import os
 import re
 import shutil
 import subprocess
@@ -131,7 +140,7 @@ def build() -> int:
 
 
 def check() -> int:
-    """Run the same gates as CI's quality.yml and test.yml, stopping at the first failure."""
+    """Run the same gates as CI (ci.yml's quality and test jobs), stopping at the first failure."""
     steps = [
         (sys.executable, "-m", "ruff", "check", "bananabench", "tests", "scripts"),
         (sys.executable, "-m", "ruff", "format", "--check", "bananabench", "tests", "scripts"),
@@ -240,6 +249,116 @@ def release_notes(output: str | None = None) -> int:
     return 0
 
 
+def _write_outputs(outputs: dict[str, str]) -> None:
+    """Print ``key=value`` lines, and append them to ``$GITHUB_OUTPUT`` when it's set."""
+    lines = "".join(f"{key}={value}\n" for key, value in outputs.items())
+    sys.stdout.write(lines)
+    path = os.environ.get("GITHUB_OUTPUT")
+    if path:
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(lines)
+
+
+# Paths that can't affect the package, its tests, or the lint/type checks. fnmatch's
+# "*" also matches "/", so "*.md" covers Markdown anywhere. scripts/ isn't here: it's
+# linted, and tests/test_dev_script.py tests it.
+DOCS_ONLY_PATTERNS = (
+    "docs/*",
+    "*.md",
+    "examples/*",
+    "justfile",
+    "CITATION.cff",
+    ".readthedocs.yaml",
+    ".github/dependabot.yml",
+    ".github/workflows/publish.yml",
+)
+
+_NULL_SHA = "0" * 40
+
+
+def ci_diff_base(event: str, pr_base: str = "", before: str = "") -> str | None:
+    """The commit to diff against, or None when CI should just run everything.
+
+    Pull requests diff against their base; pushes against the previous tip. A manual
+    run, or the first push of a new branch (``before`` is all zeros), has no base.
+    """
+    if event == "pull_request":
+        return pr_base or None
+    if event == "push" and before and before != _NULL_SHA:
+        return before
+    return None
+
+
+def ci_needed_jobs(files: list[str]) -> dict[str, bool]:
+    """Which CI jobs a change set needs: anything outside DOCS_ONLY_PATTERNS needs both."""
+    needed = any(
+        not any(fnmatch.fnmatch(path, pattern) for pattern in DOCS_ONLY_PATTERNS) for path in files
+    )
+    return {"tests": needed, "quality": needed}
+
+
+def ci_changes(event: str, pr_base: str, before: str, head: str) -> int:
+    base = ci_diff_base(event, pr_base, before)
+    files: list[str] | None = None
+    if base is None:
+        print("Manual run or new branch: running everything.")
+    else:
+        diff = subprocess.run(
+            ["git", "diff", "--name-only", base, head],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        if diff.returncode != 0:
+            print(f"Could not diff against {base} (e.g. after a force-push): running everything.")
+        else:
+            files = [line for line in diff.stdout.splitlines() if line]
+            print("Changed files:", *files, sep="\n  ")
+    jobs = {"tests": True, "quality": True} if files is None else ci_needed_jobs(files)
+    _write_outputs({key: str(value).lower() for key, value in jobs.items()})
+    return 0
+
+
+def release_decision(version: str, tags: list[str]) -> tuple[bool, str | None]:
+    """Decide whether ``version`` is a new release, given the repository's tags.
+
+    Returns ``(release, latest)``: ``release`` is False when tag ``v<version>`` already
+    exists. Raises SystemExit when the version isn't higher than the latest released
+    one. Versions compare by PEP 440 (``packaging``), so 0.4.0 ranks above 0.4.0rc1,
+    which plain ``sort -V`` gets wrong. Tags that aren't PEP 440 versions are ignored.
+    """
+    from packaging.version import InvalidVersion, Version
+
+    if f"v{version}" in tags:
+        return False, version
+    released = []
+    for tag in tags:
+        if not tag.startswith("v"):
+            continue
+        try:
+            released.append(Version(tag[1:]))
+        except InvalidVersion:
+            continue
+    latest = max(released) if released else None
+    if latest is not None and Version(version) <= latest:
+        raise SystemExit(f"error: version {version} is not higher than the latest release {latest}")
+    return True, str(latest) if latest is not None else None
+
+
+def release_check() -> int:
+    version = _project_field("version")
+    tags = subprocess.run(
+        ["git", "tag", "-l", "v*"], cwd=ROOT, capture_output=True, text=True, check=True
+    ).stdout.split()
+    release, latest = release_decision(version, tags)
+    if release:
+        print(f"New version v{version} (previous: v{latest or 'none'}): releasing.")
+    else:
+        print(f"v{version} already exists: nothing to release.")
+    _write_outputs({"version": version, "release": str(release).lower()})
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python scripts/dev.py", description="banana-bench development helper."
@@ -255,8 +374,21 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_notes.add_argument("-o", "--output", help="write to this file instead of stdout")
     sub.add_parser("version", help="print pyproject.toml's version")
+    p_changes = sub.add_parser("ci-changes", help="CI: decide which jobs a push or PR needs")
+    p_changes.add_argument("--event", required=True, help="github.event_name")
+    p_changes.add_argument("--pr-base", default="", help="pull request base SHA")
+    p_changes.add_argument("--before", default="", help="push event's previous SHA")
+    p_changes.add_argument("--head", required=True, help="the commit under test")
+    sub.add_parser(
+        "release-check",
+        help="CI: is pyproject.toml's version a new release? (fails if not higher than the last)",
+    )
 
     args = parser.parse_args(argv)
+    if args.command == "ci-changes":
+        return ci_changes(args.event, args.pr_base, args.before, args.head)
+    if args.command == "release-check":
+        return release_check()
     if args.command == "clean":
         return clean(dry_run=args.dry_run)
     if args.command == "build":

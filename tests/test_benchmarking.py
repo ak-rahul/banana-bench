@@ -3,6 +3,7 @@ Tests for bananabench.benchmarking: BenchmarkRunner and quick_benchmark.
 """
 
 import csv
+import json
 import tempfile
 from pathlib import Path
 
@@ -96,6 +97,152 @@ class TestRunSingle:
         assert result["success"] is False
 
 
+def endless_optimizer(func, bounds, **kwargs):
+    """Random search with no stopping rule: only a budget can stop it."""
+    rng = np.random.default_rng(0)
+    low = np.array([b[0] for b in bounds])
+    high = np.array([b[1] for b in bounds])
+    while True:
+        func(rng.uniform(low, high))
+
+
+def lying_optimizer(func, bounds, **kwargs):
+    """Reports a perfect score its point doesn't achieve."""
+    x = np.array([b[1] for b in bounds], dtype=float)
+    func(x)
+    return x, 0.0
+
+
+class TestEvaluationBudget:
+    def test_budget_stops_an_endless_algorithm(self):
+        runner = BenchmarkRunner(endless_optimizer, max_evals=250, verbose=False)
+        result = runner.run_single("sphere", dim=3)
+        assert result["status"] == "budget_exhausted"
+        assert result["success"] is True
+        assert result["n_evals"] == 250
+        assert result["max_evals"] == 250
+
+    def test_budget_exhausted_run_is_scored_on_best_so_far(self):
+        runner = BenchmarkRunner(endless_optimizer, max_evals=500, verbose=False)
+        result = runner.run_single("sphere", dim=2)
+        assert np.isfinite(result["best_cost"])
+        assert result["cost_mismatch"] is False
+        assert result["error"] == pytest.approx(result["best_cost"])
+
+    def test_budget_as_function_of_dimension(self):
+        runner = BenchmarkRunner(endless_optimizer, max_evals=lambda d: 100 * d, verbose=False)
+        assert runner.run_single("sphere", dim=2)["n_evals"] == 200
+        assert runner.run_single("sphere", dim=5)["n_evals"] == 500
+
+    def test_invalid_budget_raises(self):
+        runner = BenchmarkRunner(zero_optimizer, max_evals=lambda d: 0, verbose=False)
+        with pytest.raises(ValueError):
+            runner.run_single("sphere", dim=2)
+
+    def test_evaluations_counted_without_budget(self):
+        runner = BenchmarkRunner(simple_optimizer, verbose=False)
+        result = runner.run_single("sphere", dim=2, max_iter=40)
+        assert result["n_evals"] == 40
+        assert result["max_evals"] is None
+
+    def test_failed_runs_still_report_evaluations(self):
+        def crashes_after_some_work(func, bounds, **kwargs):
+            for _ in range(5):
+                func(np.zeros(len(bounds)))
+            raise RuntimeError("boom")
+
+        result = BenchmarkRunner(crashes_after_some_work, verbose=False).run_single("sphere", dim=2)
+        assert result["status"] == "exception"
+        assert result["n_evals"] == 5
+
+    def test_suite_aggregates_evaluations(self):
+        runner = BenchmarkRunner(
+            endless_optimizer, n_runs=3, max_evals=120, verbose=False, show_progress=False
+        )
+        (agg,) = runner.run_suite(functions=["sphere"], dimensions={"sphere": 2})
+        assert agg["n_evals_mean"] == 120
+        assert agg["n_budget_exhausted"] == 3
+
+    def test_parallel_matches_serial_under_budget(self):
+        kwargs = dict(n_runs=2, seed=7, max_evals=200, verbose=False, show_progress=False)
+        serial = BenchmarkRunner(endless_optimizer, n_jobs=1, **kwargs).run_suite(
+            functions=["sphere"]
+        )
+        parallel = BenchmarkRunner(endless_optimizer, n_jobs=2, **kwargs).run_suite(
+            functions=["sphere"]
+        )
+        assert serial[0]["error_mean"] == parallel[0]["error_mean"]
+        assert serial[0]["n_evals_mean"] == parallel[0]["n_evals_mean"] == 200
+
+
+class TestVerification:
+    def test_lying_algorithm_is_scored_on_the_truth(self):
+        result = BenchmarkRunner(lying_optimizer, verbose=False).run_single("sphere", dim=2)
+        assert result["reported_cost"] == 0.0
+        assert result["cost_mismatch"] is True
+        # sphere's upper bound corner is far from zero; the error must reflect that.
+        assert result["best_cost"] > 1.0
+        assert result["error"] == pytest.approx(result["best_cost"])
+
+    def test_honest_algorithm_has_no_mismatch(self):
+        result = BenchmarkRunner(zero_optimizer, verbose=False).run_single("sphere", dim=2)
+        assert result["cost_mismatch"] is False
+        assert result["best_cost"] == result["reported_cost"]
+
+    def test_verify_false_scores_the_reported_cost(self):
+        runner = BenchmarkRunner(lying_optimizer, verify=False, verbose=False)
+        result = runner.run_single("sphere", dim=2)
+        assert result["best_cost"] == 0.0
+        assert result["cost_mismatch"] is None
+
+    def test_verification_is_not_counted_against_the_budget(self):
+        runner = BenchmarkRunner(endless_optimizer, max_evals=50, verbose=False)
+        assert runner.run_single("sphere", dim=2)["n_evals"] == 50
+
+    def test_summary_warns_about_mismatches(self, capsys):
+        BenchmarkRunner(lying_optimizer, verbose=True, show_progress=False).run_suite(
+            functions=["sphere"]
+        )
+        assert "does not match f(best_x)" in capsys.readouterr().out
+
+    def test_compare_algorithms_shows_evaluations(self):
+        a = BenchmarkRunner(endless_optimizer, algorithm_name="A", max_evals=100, verbose=False)
+        b = BenchmarkRunner(zero_optimizer, algorithm_name="B", verbose=False)
+        for runner in (a, b):
+            runner.run_suite(functions=["sphere"])
+        table = compare_algorithms([a, b])
+        assert "Evals Mean" in table
+        assert "100" in table
+
+
+class TestTraces:
+    def test_trace_recorded_when_requested(self):
+        runner = BenchmarkRunner(endless_optimizer, max_evals=300, record_trace=True, verbose=False)
+        result = runner.run_single("sphere", dim=2)
+        trace = np.array(result["trace"])
+        assert trace.shape[1] == 2
+        assert trace[0, 0] == 1
+        assert result["first_cost"] == trace[0, 1]
+        assert trace[-1, 1] == pytest.approx(result["best_cost"])
+
+    def test_no_trace_by_default(self):
+        result = BenchmarkRunner(zero_optimizer, verbose=False).run_single("sphere", dim=2)
+        assert "trace" not in result
+
+    def test_json_keeps_traces_and_csv_drops_them(self, tmp_path):
+        import json
+
+        runner = BenchmarkRunner(
+            endless_optimizer, max_evals=50, record_trace=True, verbose=False, show_progress=False
+        )
+        runner.run_suite(functions=["sphere"])
+        runner.save_results(tmp_path / "r.json", format="json")
+        runner.save_results(tmp_path / "r.csv", format="csv")
+        assert "trace" in json.loads((tmp_path / "r.json").read_text())[0]
+        with open(tmp_path / "r.csv", newline="") as f:
+            assert "trace" not in next(csv.DictReader(f))
+
+
 class TestRunSuite:
     def test_runs_every_requested_function(self):
         runner = BenchmarkRunner(
@@ -123,6 +270,23 @@ class TestRunSuite:
             zero_optimizer, n_runs=2, seed=1, show_progress=False, verbose=False
         ).run_suite(functions=["sphere", "ackley"])
         assert [r["error_mean"] for r in results_with] == [r["error_mean"] for r in results_without]
+
+    def test_verbose_table_shows_tiny_known_minimum(self, capsys):
+        """gear's known minimum (~2.7e-12) used to print as 0.000000 in the verbose table."""
+
+        def lower_edge_optimizer(func, bounds, **kwargs):
+            # gear is undefined at the origin; its lower bound edge (12, 12, 12, 12) is in-domain.
+            x = np.array([b[0] for b in bounds], dtype=float)
+            return x, func(x)
+
+        BenchmarkRunner(lower_edge_optimizer, verbose=True, show_progress=False).run_suite(
+            functions=["gear"]
+        )
+        gear_rows = [
+            line for line in capsys.readouterr().out.splitlines() if line.startswith("gear ")
+        ]
+        assert gear_rows, "gear row missing from verbose output"
+        assert "e-12" in gear_rows[0]
 
 
 class TestParallelExecution:
@@ -322,7 +486,7 @@ class TestMORunSingle:
 
 
 class TestMORunSuite:
-    def test_runs_every_zdt_function_by_default(self):
+    def test_runs_every_mo_function_by_default(self):
         runner = MOBenchmarkRunner(random_search_mo, verbose=False, seed=1)
         results = runner.run_suite(n_points=10)
         assert {r["function"] for r in results} == set(mo.get_mo_function_list())
@@ -349,3 +513,219 @@ class TestMORunSuite:
         by_name = {r["function"]: r for r in results}
         assert by_name["zdt1"]["success"] is False
         assert by_name["zdt4"]["success"] is True
+
+
+class TestMODTLZ:
+    def test_dtlz_runs_with_three_objectives_by_default(self):
+        result = MOBenchmarkRunner(random_search_mo, verbose=False, seed=1).run_single(
+            "dtlz2", n_points=30
+        )
+        assert result["success"] is True
+        assert result["n_objectives"] == 3
+        assert result["dimension"] == 12  # M + k - 1 with k = 10
+        assert result["igd"] > 0.0
+        assert result["hypervolume"] >= 0.0
+
+    def test_n_objectives_override(self):
+        runner = MOBenchmarkRunner(random_search_mo, verbose=False, seed=1, n_objectives=5)
+        result = runner.run_single("dtlz1", n_points=20)
+        assert result["n_objectives"] == 5
+        assert result["dimension"] == 9  # 5 + 5 - 1
+
+    def test_pareto_optimal_points_score_near_zero_igd(self):
+        def optimal_dtlz2(func, bounds, n_objectives, **kwargs):
+            rng = np.random.default_rng(0)
+            X = rng.random((400, len(bounds)))
+            X[:, n_objectives - 1 :] = 0.5
+            return X, np.array([func(x) for x in X])
+
+        result = MOBenchmarkRunner(optimal_dtlz2, verbose=False).run_single("dtlz2")
+        assert result["igd"] < 0.1
+
+    def test_zdt_rejects_more_objectives(self):
+        runner = MOBenchmarkRunner(random_search_mo, verbose=False, n_objectives=3)
+        with pytest.raises(ValueError):
+            runner.run_single("zdt1", dim=5)
+
+
+class TestMOBudget:
+    def test_counts_evaluations(self):
+        result = MOBenchmarkRunner(random_search_mo, verbose=False, seed=1).run_single(
+            "zdt1", dim=5, n_points=25
+        )
+        assert result["n_evals"] == 25
+        assert result["max_evals"] is None
+
+    def test_budget_exhausted_run_is_scored_on_archive(self):
+        runner = MOBenchmarkRunner(random_search_mo, verbose=False, seed=1, max_evals=15)
+        result = runner.run_single("zdt1", dim=5, n_points=100)
+        assert result["status"] == "budget_exhausted"
+        assert result["success"] is True
+        assert result["n_evals"] == 15
+        assert result["n_solutions"] == 15
+        assert np.isfinite(result["igd"])
+
+    def test_budget_as_function_of_dimension(self):
+        runner = MOBenchmarkRunner(random_search_mo, verbose=False, max_evals=lambda d: 2 * d)
+        assert runner.run_single("zdt1", dim=5, n_points=100)["n_evals"] == 10
+
+
+class TestMOResultsOutput:
+    def _runner(self):
+        def sometimes_fails(func, bounds, n_objectives, **kwargs):
+            if len(bounds) == 7:
+                raise RuntimeError("boom")
+            return random_search_mo(func, bounds, n_objectives, **kwargs)
+
+        runner = MOBenchmarkRunner(sometimes_fails, "Mixed", verbose=False, seed=1, max_evals=20)
+        runner.run_suite(functions=["zdt1", "dtlz2"], dimensions={"zdt1": 5, "dtlz2": 7})
+        return runner
+
+    def test_csv_takes_union_of_keys_across_mixed_results(self, tmp_path):
+        runner = self._runner()
+        path = tmp_path / "mo.csv"
+        runner.save_results(path, format="csv")
+        with open(path, newline="") as f:
+            rows = list(csv.DictReader(f))
+        assert [r["function"] for r in rows] == ["zdt1", "dtlz2"]
+        assert rows[0]["status"] == "budget_exhausted"
+        assert rows[1]["status"] == "exception"
+        assert rows[1]["igd"] == ""  # key absent from the failed run
+
+    def test_json_round_trips(self, tmp_path):
+        runner = self._runner()
+        path = tmp_path / "mo.json"
+        runner.save_results(path, format="json")
+        with open(path) as f:
+            loaded = json.load(f)
+        assert loaded[0]["n_evals"] == 20
+        assert loaded[1]["error_message"] == "boom"
+
+    def test_unknown_format_raises(self, tmp_path):
+        with pytest.raises(ValueError):
+            self._runner().save_results(tmp_path / "x", format="xml")
+
+    def test_summary_stats_cover_successful_runs_only(self):
+        stats = self._runner().get_summary_stats()
+        assert stats["n_results"] == 2
+        assert stats["n_successful"] == 1
+        assert stats["success_rate"] == 0.5
+        assert stats["n_evals_mean"] == 20.0
+        assert stats["n_budget_exhausted"] == 1
+        assert stats["igd_min"] == stats["igd_max"] == stats["igd_mean"]
+        assert "hypervolume_mean" not in stats
+
+    def test_summary_stats_with_no_results(self):
+        stats = MOBenchmarkRunner(random_search_mo, verbose=False).get_summary_stats()
+        assert stats == {"n_results": 0, "n_successful": 0}
+
+
+class TestResultValidation:
+    @staticmethod
+    def _run(algorithm, func="sphere", dim=3):
+        runner = BenchmarkRunner(algorithm, "probe", verbose=False, show_progress=False)
+        return runner.run_single(func, dim)
+
+    def test_wrong_length_best_x_is_invalid(self):
+        # sphere accepts any length, so verification alone can't catch this.
+        result = self._run(lambda f, b: (np.zeros(len(b) + 1), 0.0))
+        assert result["status"] == "invalid_result"
+        assert "expected 3" in result["error_message"]
+
+    def test_malformed_cost_fails_one_run_not_the_suite(self):
+        runner = BenchmarkRunner(
+            lambda f, b: (np.zeros(len(b)), "not a number"),
+            "bad",
+            verbose=False,
+            show_progress=False,
+        )
+        results = runner.run_suite(functions=["sphere", "ackley"], dimensions={"sphere": 2})
+        assert [r["n_successful"] for r in results] == [0, 0]
+        assert all(r["status"] == "invalid_result" for r in runner.results)
+
+    def test_out_of_bounds_best_x_is_flagged(self):
+        def outside(func, bounds):
+            x = np.array([hi for _, hi in bounds]) + 1.0
+            return x, func(x)
+
+        result = self._run(outside)
+        assert result["success"] is True
+        assert result["out_of_bounds"] is True
+        assert self._run(lambda f, b: (np.zeros(len(b)), 0.0))["out_of_bounds"] is False
+
+    def test_out_of_bounds_counted_in_summaries(self, capsys):
+        def outside(func, bounds):
+            x = np.array([hi for _, hi in bounds]) + 1.0
+            return x, func(x)
+
+        runner = BenchmarkRunner(outside, "out", n_runs=2, verbose=False, show_progress=False)
+        results = runner.run_suite(functions=["sphere"], dimensions={"sphere": 2})
+        assert results[0]["n_out_of_bounds"] == 2
+        assert runner.get_summary_stats()["n_out_of_bounds"] == 2
+        runner.print_summary(results)
+        assert "outside the search bounds" in capsys.readouterr().out
+
+    def test_json_output_is_strict_json(self, tmp_path):
+        runner = BenchmarkRunner(
+            lambda f, b: (np.zeros(len(b)), float("inf")),
+            "inf",
+            verbose=False,
+            show_progress=False,
+        )
+        runner.run_suite(functions=["sphere"], dimensions={"sphere": 2})
+        path = tmp_path / "r.json"
+        runner.save_results(path, format="json")
+        text = path.read_text()
+        assert "Infinity" not in text and "NaN" not in text
+
+        def reject(constant):
+            raise ValueError(constant)
+
+        loaded = json.loads(text, parse_constant=reject)
+        assert loaded[0]["reported_cost"] is None
+
+
+def _mo_returning(F, X=None):
+    def algorithm(func, bounds, n_objectives):
+        x = np.zeros((len(np.atleast_2d(F)), len(bounds))) if X is None else X
+        return x, F
+
+    return algorithm
+
+
+class TestMOResultValidation:
+    def test_wrong_objective_count_is_invalid_not_raised(self):
+        result = MOBenchmarkRunner(_mo_returning(np.zeros((3, 3))), verbose=False).run_single(
+            "zdt1", dim=5
+        )
+        assert result["status"] == "invalid_result"
+        assert "expected (n_points, 2)" in result["error_message"]
+
+    def test_non_finite_objectives_are_invalid_without_verification(self):
+        runner = MOBenchmarkRunner(
+            _mo_returning(np.full((3, 2), np.nan)), verbose=False, verify=False
+        )
+        assert runner.run_single("zdt1", dim=5)["status"] == "invalid_result"
+
+    def test_verification_scores_true_objectives(self):
+        # Claims the ideal point (0, 0), which no ZDT1 solution reaches.
+        lying = _mo_returning(np.zeros((4, 2)), X=np.full((4, 5), 0.5))
+        result = MOBenchmarkRunner(lying, verbose=False).run_single("zdt1", dim=5)
+        assert result["success"] is True
+        assert result["n_mismatched"] == 4
+        assert result["igd"] > 0.1
+        unchecked = MOBenchmarkRunner(lying, verbose=False, verify=False).run_single("zdt1", dim=5)
+        assert unchecked["n_mismatched"] is None
+        assert result["hypervolume"] < unchecked["hypervolume"]
+
+    def test_honest_algorithm_has_no_mismatches(self):
+        result = MOBenchmarkRunner(random_search_mo, verbose=False, seed=1).run_single(
+            "dtlz2", n_points=10
+        )
+        assert result["n_mismatched"] == 0
+
+    def test_x_not_matching_f_is_invalid(self):
+        bad = _mo_returning(np.zeros((4, 2)), X=np.zeros((3, 5)))
+        result = MOBenchmarkRunner(bad, verbose=False).run_single("zdt1", dim=5)
+        assert result["status"] == "invalid_result"
+        assert "to match F" in result["error_message"]

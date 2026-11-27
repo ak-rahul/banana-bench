@@ -24,6 +24,9 @@ concurrency:
 jobs:
   detect:
     name: 🔖 Detect version bump
+    # Releases come from main only. Without this, "Run workflow" on a feature branch
+    # whose version isn't tagged yet would publish that branch to PyPI.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
       release: ${{ steps.check.outputs.release }}
@@ -34,46 +37,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: 🐍 Set up Python 3.12
-        uses: actions/setup-python@v7
+      - name: 🧰 Set up Python 3.12 and packaging
+        uses: ./.github/actions/setup-python-env
         with:
-          python-version: '3.12'
+          install: packaging
 
+      # Skips the release if tag v<version> exists, and fails if the version isn't higher
+      # than the latest tag (PEP 440 order). Logic: scripts/dev.py release_decision.
       - name: 🔍 Compare version with existing tags
         id: check
-        run: |
-          version="$(python scripts/dev.py version)"
-          tag="v${version}"
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-
-          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
-            echo "${tag} already exists; nothing to release."
-            echo "release=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          # Refuse to release a version lower than an existing one. Compared with
-          # PEP 440 ordering (`packaging`), so 0.4.0 correctly ranks above 0.4.0rc1,
-          # which plain `sort -V` gets wrong.
-          python -m pip install --quiet packaging
-          latest="$(git tag -l 'v*' | python -c '
-          import sys
-          from packaging.version import InvalidVersion, Version
-          versions = []
-          for tag in sys.stdin.read().split():
-              try:
-                  versions.append(Version(tag[1:]))
-              except InvalidVersion:
-                  pass
-          print(max(versions) if versions else "")
-          ')"
-          if [ -n "${latest}" ] && python -c "import sys; from packaging.version import Version as V; sys.exit(V('${version}') > V('${latest}'))"; then
-            echo "::error::Version ${version} is not higher than the latest release ${latest}."
-            exit 1
-          fi
-
-          echo "New version ${tag} (previous: v${latest:-none}); releasing."
-          echo "release=true" >> "$GITHUB_OUTPUT"
+        run: python scripts/dev.py release-check
 
       - name: 📝 Check CHANGELOG and CITATION, generate release notes
         if: steps.check.outputs.release == 'true'
@@ -95,16 +68,8 @@ jobs:
       - name: 📥 Checkout repository
         uses: actions/checkout@v7
 
-      - name: 🐍 Set up Python 3.12
-        uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-          cache: 'pip'
-
-      - name: 📦 Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+      - name: 🧰 Set up Python 3.12 and dependencies
+        uses: ./.github/actions/setup-python-env
 
       - name: 🧪 Run test suite
         run: pytest tests/ -v
@@ -120,16 +85,10 @@ jobs:
       - name: 📥 Checkout repository
         uses: actions/checkout@v7
 
-      - name: 🐍 Set up Python 3.12
-        uses: actions/setup-python@v7
+      - name: 🧰 Set up Python 3.12 and build tooling
+        uses: ./.github/actions/setup-python-env
         with:
-          python-version: '3.12'
-          cache: 'pip'
-
-      - name: 🛠️ Install build tooling
-        run: |
-          python -m pip install --upgrade pip
-          pip install build twine
+          install: build twine
 
       - name: 🏗️ Build sdist and wheel
         run: python -m build

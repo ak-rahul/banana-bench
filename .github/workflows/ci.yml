@@ -1,0 +1,120 @@
+name: 🧪 CI
+
+# One workflow so a single, stable job ("✅ CI passed") can gate branch protection.
+#
+# The `changes` job decides which jobs need to run. A job skipped through `if:` is
+# reported to GitHub as passing, which keeps required checks working on docs-only
+# changes; a workflow skipped through `paths-ignore` reports nothing at all and
+# leaves required checks waiting forever.
+#
+# Triggers: pushes to main, every pull request (drafts included), and manual runs.
+# Feature branches get CI once a pull request is open, so open a draft PR early;
+# "Run workflow" in the Actions tab runs it on any branch without one.
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: 🔍 Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      tests: ${{ steps.filter.outputs.tests }}
+      quality: ${{ steps.filter.outputs.quality }}
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+
+    - name: 🗂️ Classify changed files
+      id: filter
+      # Logic lives in scripts/dev.py (ci_changes), where it's linted and unit-tested.
+      env:
+        EVENT: ${{ github.event_name }}
+        PR_BASE: ${{ github.event.pull_request.base.sha }}
+        BEFORE: ${{ github.event.before }}
+      run: >
+        python3 scripts/dev.py ci-changes
+        --event "$EVENT" --pr-base "$PR_BASE" --before "$BEFORE" --head "$GITHUB_SHA"
+
+  quality:
+    name: 🔍 Lint, format & type check
+    needs: changes
+    if: needs.changes.outputs.quality == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v7
+
+    - name: 🧰 Set up Python 3.12 and dependencies
+      uses: ./.github/actions/setup-python-env
+      with:
+        install: .[dev]
+
+    - name: 🧹 Lint (ruff)
+      run: ruff check bananabench tests scripts
+
+    - name: 🎨 Check formatting (ruff format)
+      run: ruff format --check bananabench tests scripts
+
+    - name: 🔎 Type check (mypy)
+      run: mypy bananabench
+
+  test:
+    name: 🐍 Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    needs: changes
+    if: needs.changes.outputs.tests == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.11', '3.12', '3.13', '3.14', '3.15']
+
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v7
+
+    - name: 🧰 Set up Python ${{ matrix.python-version }} and dependencies
+      uses: ./.github/actions/setup-python-env
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: 🧪 Run test suite with coverage
+      run: |
+        pytest tests/ -v --cov=bananabench --cov-report=xml
+
+    - name: 📊 Upload coverage to Codecov
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+      uses: codecov/codecov-action@v7
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        fail_ci_if_error: false
+
+  ci-passed:
+    name: ✅ CI passed
+    # Require only this job in branch protection. It passes when every needed job
+    # passed or was skipped as unnecessary, and fails if any failed or was cancelled.
+    needs: [changes, quality, test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+    - name: ❌ Fail if any job failed or was cancelled
+      if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+      run: |
+        echo "Job results: ${{ toJSON(needs.*.result) }}"
+        exit 1
+
+    - name: ✅ All required jobs passed or were skipped
+      run: |
+        echo "Job results: ${{ toJSON(needs.*.result) }}"

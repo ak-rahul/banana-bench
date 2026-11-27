@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 from . import functions as _f
+from .utils import _format_value
 
 # Complete metadata for all benchmark functions
 BENCHMARK_SUITE: Dict[str, Any] = {
@@ -240,8 +241,9 @@ BENCHMARK_SUITE: Dict[str, Any] = {
         "properties": ["discontinuous", "non-differentiable", "separable", "scalable", "unimodal"],
         "bounds": [(-5.12, 5.12)],
         "default_dim": 5,
-        "known_minimum": 30.0,  # 6*n for n=5
-        "optimal_point": [0.0],
+        # 6n + sum(floor(x_i)) with floor(x_i) = -6 for x_i in [-5.12, -5): 0 for every n.
+        "known_minimum": 0.0,
+        "optimal_point": [-5.06],
     },
     "maxmod": {
         "function": _f.maxmod,
@@ -648,8 +650,9 @@ BENCHMARK_SUITE: Dict[str, Any] = {
         "properties": ["discontinuous", "non-differentiable", "separable", "non-convex"],
         "bounds": [(-5.12, 5.12)],
         "default_dim": 5,
-        "known_minimum": 30.0,
-        "optimal_point": [0.0, 0.0, 0.0, 0.0, 0.0],
+        # De Jong's F3: 30 + sum(floor(x_i)), floor(x_i) = -6 on [-5.12, -5).
+        "known_minimum": 0.0,
+        "optimal_point": [-5.06, -5.06, -5.06, -5.06, -5.06],
     },
     "powell": {
         "function": _f.powell,
@@ -781,15 +784,6 @@ def get_bounds(name, dim=None):
     return info["bounds"] * dim
 
 
-def _format_known_min(value: float, precision: int = 4) -> str:
-    """Fixed-point format a known_minimum, falling back to scientific notation
-    whenever fixed-point at `precision` decimals would display a nonzero value as
-    all-zero -- e.g. `gear`'s known minimum (~2.7e-12) rounds to "0.0000" otherwise."""
-    if value != 0 and round(value, precision) == 0:
-        return f"{value:.3e}"
-    return f"{value:.{precision}f}"
-
-
 def get_function_list():
     """
     Get formatted list of all functions with metadata.
@@ -803,7 +797,7 @@ def get_function_list():
     for name in get_all_functions():
         info = BENCHMARK_SUITE[name]
         lines.append(
-            f"{name:20s} | dim={info['default_dim']:2d} | min={_format_known_min(info['known_minimum']):>10s}"
+            f"{name:20s} | dim={info['default_dim']:2d} | min={_format_value(info['known_minimum']):>10s}"
         )
     lines.append("=" * 70)
     return "\n".join(lines)

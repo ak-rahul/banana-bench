@@ -12,6 +12,22 @@ from typing import List, Optional, Tuple, Union
 import numpy as np
 
 
+def _format_value(value: float, width: int = 0, precision: int = 4) -> str:
+    """Fixed-point format a number for a text table, right-aligned to ``width``.
+
+    Falls back to scientific notation whenever fixed-point at ``precision`` decimals
+    would show a nonzero value as all zeros. For example, ``gear``'s known minimum
+    (~2.7e-12) would otherwise print as ``0.0000``. Non-finite values print as-is
+    (``nan``, ``inf``). This is the single formatter behind every CLI ``--list``
+    table, ``metadata.get_function_list()`` and ``BenchmarkRunner``'s verbose output.
+    """
+    if not np.isfinite(value):
+        return f"{value!s:>{width}}"
+    if value != 0 and round(value, precision) == 0:
+        return f"{value:>{width}.3e}"
+    return f"{value:>{width}.{precision}f}"
+
+
 def normalize_bounds(
     bounds_raw: Union[List, Tuple, np.ndarray], dim: int
 ) -> List[Tuple[float, float]]:

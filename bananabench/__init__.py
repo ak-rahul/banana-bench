@@ -15,6 +15,27 @@ References
        functions for global optimization problems. International Journal of
        Mathematical Modelling and Numerical Optimisation, 4(2), 150-194.
        https://doi.org/10.1504/IJMMNO.2013.055204
+.. [4] Moré, J. J., Garbow, B. S., & Hillstrom, K. E. (1981). Testing
+       unconstrained optimization software. ACM Transactions on Mathematical
+       Software, 7(1), 17-41. (holzman1 / the Gulf R&D function.)
+.. [5] Deb, K., Thiele, L., Laumanns, M., & Zitzler, E. (2005). Scalable test
+       problems for evolutionary multiobjective optimization. In Evolutionary
+       Multiobjective Optimization (pp. 105-145). Springer. (DTLZ suite.)
+.. [6] While, L., Bradstreet, L., & Barone, L. (2012). A fast way of calculating
+       exact hypervolumes. IEEE Transactions on Evolutionary Computation, 16(1),
+       86-95. (WFG hypervolume.)
+.. [7] Dolan, E. D., & Moré, J. J. (2002). Benchmarking optimization software
+       with performance profiles. Mathematical Programming, 91(2), 201-213.
+.. [8] Moré, J. J., & Wild, S. M. (2009). Benchmarking derivative-free
+       optimization algorithms. SIAM Journal on Optimization, 20(1), 172-191.
+.. [9] Hansen, N., Auger, A., Ros, R., Mersmann, O., Tušar, T., & Brockhoff, D.
+       (2021). COCO: A platform for comparing continuous optimizers in a
+       black-box setting. Optimization Methods and Software, 36(1), 114-144.
+.. [10] Demšar, J. (2006). Statistical comparisons of classifiers over multiple
+        data sets. Journal of Machine Learning Research, 7, 1-30.
+.. [11] Kudela, J. (2022). A critical problem in benchmarking and analysis of
+        evolutionary computation methods. Nature Machine Intelligence, 4,
+        1238-1245. (The center-bias test, ``analysis.center_bias_test``.)
 
 License: MIT
 """
@@ -31,7 +52,17 @@ __license__ = "MIT"
 
 import warnings
 
-from . import cec, constraints, engineering, g_suite, gradients, multiobjective, plotly_viz
+from . import (
+    analysis,
+    cec,
+    constraints,
+    engineering,
+    g_suite,
+    gradients,
+    multiobjective,
+    plotly_viz,
+    tracking,
+)
 from .benchmarking import BenchmarkRunner, MOBenchmarkRunner, compare_algorithms, quick_benchmark
 from .constraints import constraint_violation, feasibility_compare, is_feasible
 from .functions import (
@@ -120,6 +151,7 @@ from .metadata import (
     get_function_list,
     query_functions,
 )
+from .tracking import BudgetExhausted, TrackedFunction
 from .utils import (
     calculate_distance_to_optimum,
     check_bounds,
@@ -144,8 +176,11 @@ from .visualization import (
     plot_algorithm_comparison,
     plot_benchmark_summary,
     plot_convergence,
+    plot_data_profile,
     plot_function_2d,
     plot_function_3d,
+    plot_performance_profile,
+    plot_runtime_ecdf,
     plot_search_heatmap,
     plot_trajectory_2d,
     save_plot,
@@ -272,6 +307,10 @@ __all__ = [
     "constraint_violation",
     "is_feasible",
     "feasibility_compare",
+    "tracking",
+    "analysis",
+    "TrackedFunction",
+    "BudgetExhausted",
 ]
 
 if __visualization_available__:
@@ -287,6 +326,9 @@ if __visualization_available__:
             "save_plot",
             "batch_plot_functions",
             "animate_trajectory_2d",
+            "plot_performance_profile",
+            "plot_data_profile",
+            "plot_runtime_ecdf",
             "COLORMAPS",
         ]
     )

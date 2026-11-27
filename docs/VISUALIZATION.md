@@ -125,17 +125,18 @@ Compare multiple algorithms on various metrics using bar charts.
 ```python
 from bananabench.visualization import plot_algorithm_comparison
 
-results = {
+# {algorithm: {function: {metric: value}}}, not the runner's list of result dicts
+comparison = {
     'SimulatedAnnealing': {'sphere': {'error': 0.001, 'time': 1.2}},
     'GeneticAlgorithm': {'sphere': {'error': 0.01, 'time': 0.8}}
 }
 
 # Compare by Error
-plot_algorithm_comparison(results, metric='error')
+plot_algorithm_comparison(comparison, metric='error')
 plt.show()
 
 # Compare by Time
-plot_algorithm_comparison(results, metric='time')
+plot_algorithm_comparison(comparison, metric='time')
 plt.show()
 ```
 
@@ -145,10 +146,35 @@ Generate a comprehensive 4-panel summary of your benchmark results.
 ```python
 from bananabench.visualization import plot_benchmark_summary
 
-# results is a list of dictionaries from BenchmarkRunner
+# runner is a BenchmarkRunner; plot the list its run_suite() returns
+results = runner.run_suite(functions=['sphere', 'ackley', 'rastrigin'])
 fig = plot_benchmark_summary(results)
 plt.savefig('summary.png', dpi=300)
 plt.show()
+```
+
+### Performance Profiles, Data Profiles and Runtime ECDFs
+Step plots for the outputs of `bananabench.analysis`: one line per solver, in a colorblind-safe
+palette (Okabe & Ito) with distinct line styles.
+
+```python
+from bananabench.analysis import (
+    data_profile, histories_from_runners, performance_profile_from_runners, runtime_ecdf,
+)
+from bananabench.visualization import (
+    plot_data_profile, plot_performance_profile, plot_runtime_ecdf,
+)
+
+# runners: BenchmarkRunner instances created with record_trace=True
+taus, perf = performance_profile_from_runners(runners, target=1e-6)
+plot_performance_profile(taus, perf, save_path='performance_profile.png')  # log ratio axis
+
+histories, f_opt, dims = histories_from_runners(runners)
+alphas, data = data_profile(histories, dims, tau=1e-3)
+plot_data_profile(alphas, data, tau=1e-3, save_path='data_profile.png')
+
+budgets, ecdf = runtime_ecdf(histories, f_opt, dims=dims)
+plot_runtime_ecdf(budgets, ecdf, save_path='runtime_ecdf.png')  # evaluations / dimension, log axis
 ```
 
 ## Advanced Features
