@@ -52,9 +52,14 @@ BenchmarkRunner(
   `True` when the two disagree. `verify=False` scores reported costs unchecked (the pre-0.4.0
   behavior).
 
+Whatever `verify` is set to, a `best_x` without exactly `dim` entries, or containing NaN or inf, and
+a `best_cost` that isn't a finite number, give `status="invalid_result"` instead of a score. A
+`best_x` outside the search bounds is still scored, but gets `out_of_bounds=True`, because it
+isn't comparable with in-bounds results. `print_summary` warns about such runs.
+
 **Per-run result keys** (`runner.results`): `function`, `dimension`, `algorithm`, `run`, `status`
 (`success`, `budget_exhausted`, `failed`, `invalid_result`, `exception`, `bounds_error`),
-`success`, `best_cost`, `reported_cost`, `cost_mismatch`, `known_minimum`, `error`,
+`success`, `best_cost`, `reported_cost`, `cost_mismatch`, `out_of_bounds`, `known_minimum`, `error`,
 `distance_to_optimum`, `n_evals`, `max_evals`, `time`, and with `record_trace`, `trace` and
 `first_cost`. Failed runs carry only the keys that apply.
 
@@ -69,7 +74,8 @@ Run the benchmark suite on selected functions.
 - `**kwargs`: Additional arguments passed to your optimization algorithm.
 
 **Returns:** A list of per-function aggregate dictionaries (`error_mean`/`_std`/`_min`/`_max`,
-`time_mean`, `n_evals_mean`, `n_budget_exhausted`, `n_cost_mismatch`, `success_rate`, ...).
+`time_mean`, `n_evals_mean`, `n_budget_exhausted`, `n_cost_mismatch`, `n_out_of_bounds`,
+`success_rate`, ...).
 
 **`save_results(filepath, format='csv')`**
 
@@ -146,6 +152,10 @@ MOBenchmarkRunner(
   passing another value for a ZDT problem raises `ValueError`.
 - `max_evals`: Evaluation budget per run, as for `BenchmarkRunner`. A run that reaches it is scored
   on the non-dominated set of every objective vector it evaluated (`status="budget_exhausted"`).
+- `verify`: Re-evaluate the problem at every returned decision vector in `X` (not counted against
+  the budget) and score those objective values, not the reported `F`. `n_mismatched` counts the
+  points whose reported objectives disagreed. This costs one evaluation per returned point.
+  `verify=False` scores `F` unchecked and ignores `X`.
 
 #### Methods
 
@@ -160,9 +170,11 @@ Run the algorithm across multiple multi-objective problems.
 
 **Returns:** A list of result dictionaries. On success: `status` (`"success"` or
 `"budget_exhausted"`), `success=True`, `n_objectives`, `igd`, `hypervolume`, `n_solutions`,
-`n_nondominated`, `n_evals`, `max_evals`, and `time`. If your
-algorithm raises for a given function, that function's dict instead carries `status="exception"`,
-`success=False`, and `error_message` — one failing function doesn't abort the rest of the suite.
+`n_nondominated`, `n_mismatched` (`None` without verification), `n_evals`, `max_evals`, and
+`time`. If your algorithm raises for a given function, that function's dict instead carries
+`status="exception"`, `success=False`, and `error_message` — one failing function doesn't abort
+the rest of the suite. An `F` that isn't `(n_points, n_objectives)`, an `X` that doesn't match it,
+or non-finite objective values give `status="invalid_result"` with an `error_message`.
 
 **`run_single(function_name, dim=None, reference_point=None, **kwargs)`**
 
@@ -222,6 +234,21 @@ two need nothing beyond NumPy. `plotly_viz` degrades gracefully if `plotly` is n
     difference (3 or more algorithms).
   - Pairwise Wilcoxon signed-rank tests with Holm's correction.
   - Returns structured results plus a text `report`.
+- `center_bias_test(algorithm, functions=None, dim=None, n_runs=20, max_evals=None,
+  shift_fraction=0.1, threshold=10.0, seed=None, **kwargs) -> dict`: Kudela's (2022) test for
+  an algorithm that only does well because the optimum is at the center of the box.
+  - Runs the algorithm on each function and on `f(x + s)`, with `s` equal to `shift_fraction`
+    times the range width. The optimum moves but stays inside the box, and the bounds don't
+    change.
+  - Per function, the ratio is the shifted mean error over the unshifted one (errors floored at
+    1e-8). The verdict uses the geometric mean of the ratios: above `threshold` (Kudela's 10) is
+    `center_biased=True`.
+  - Scores the best value each run actually evaluated, not its report. Runs share seeds across
+    the two variants.
+  - `CENTER_BIAS_FUNCTIONS` is the default set: the 10 functions of Kudela's test set that the
+    suite has, including `schwefel2_26` as an off-center control.
+  - Returns `ratios`, `unshifted_error`, `shifted_error`, `geometric_mean`, `center_biased` and a
+    text `report`.
 
 **`cec` — CEC-style composition framework**
 - `CECFunction(base_func, shift_vector=None, rotation_matrix=None, bias=0.0)`: wraps any

@@ -76,10 +76,28 @@ def _write_results(results: List[Dict[str, Any]], filepath: Path, format: str) -
                 writer.writeheader()
                 writer.writerows(results)
     elif format == "json":
+        # allow_nan=False: Python's json would otherwise write NaN/Infinity, which
+        # aren't JSON, and strict parsers (JavaScript, jq, most other languages)
+        # reject the whole file. Non-finite values are written as null instead.
         with open(filepath, "w") as f:
-            json.dump(results, f, indent=2)
+            json.dump(_json_safe(results), f, indent=2, allow_nan=False)
     else:
         raise ValueError(f"Unknown format: {format}. Use 'csv' or 'json'")
+
+
+def _json_safe(value: Any) -> Any:
+    """Recursively convert NumPy scalars/arrays to Python types and NaN/inf to None."""
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, np.ndarray)):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    if isinstance(value, (int, np.integer)):
+        return int(value)
+    if isinstance(value, (float, np.floating)):
+        return float(value) if np.isfinite(value) else None
+    return value
 
 
 def _resolve_budget(max_evals: Optional[Budget], dim: int) -> Optional[int]:
@@ -265,12 +283,30 @@ class BenchmarkRunner:
             return failure("exception", time.time() - start_time, error_message=str(e))
         elapsed = time.time() - start_time
 
-        # Validate the reported result
+        # Validate the reported result. Conversions stay inside try: a malformed
+        # report (a string, a ragged list, an array cost) must fail this run only,
+        # not raise out of run_suite and lose every other function's result.
         if best_x is None or best_cost is None:
             return failure("failed", elapsed)
-        reported_cost = float(best_cost)
-        if not np.isfinite(reported_cost):
+        try:
+            reported_cost = float(best_cost)
+            best_x = np.asarray(best_x, dtype=float)
+        except (TypeError, ValueError) as e:
+            return failure("invalid_result", elapsed, error_message=f"malformed result: {e}")
+        if best_x.size != dim:
+            return failure(
+                "invalid_result",
+                elapsed,
+                reported_cost=reported_cost,
+                error_message=f"best_x has {best_x.size} entries, expected {dim}",
+            )
+        best_x = best_x.reshape(dim)
+        if not np.isfinite(reported_cost) or not np.all(np.isfinite(best_x)):
             return failure("invalid_result", elapsed, reported_cost=reported_cost)
+        bounds_array = np.asarray(bounds, dtype=float)
+        out_of_bounds = bool(
+            np.any(best_x < bounds_array[:, 0]) or np.any(best_x > bounds_array[:, 1])
+        )
 
         # Verify the report against a fresh evaluation of the raw function
         # (not counted against the budget).
@@ -278,7 +314,7 @@ class BenchmarkRunner:
         scored_cost = reported_cost
         if self.verify:
             try:
-                verified_cost = float(func(np.asarray(best_x, dtype=float)))
+                verified_cost = float(func(best_x))
             except Exception as e:
                 return failure(
                     "exception",
@@ -305,6 +341,7 @@ class BenchmarkRunner:
             "best_cost": float(scored_cost),
             "reported_cost": reported_cost,
             "cost_mismatch": cost_mismatch,
+            "out_of_bounds": out_of_bounds,
             "known_minimum": float(known_min),
             "error": float(abs(scored_cost - known_min)),
             "distance_to_optimum": float(distance) if distance is not None else None,
@@ -437,6 +474,7 @@ class BenchmarkRunner:
                         1 for r in successful_runs if r["status"] == "budget_exhausted"
                     ),
                     "n_cost_mismatch": sum(1 for r in successful_runs if r.get("cost_mismatch")),
+                    "n_out_of_bounds": sum(1 for r in successful_runs if r.get("out_of_bounds")),
                 }
 
                 if self.verbose:
@@ -559,6 +597,12 @@ class BenchmarkRunner:
                 print(
                     f"\n{exhausted} run(s) stopped at the evaluation budget (scored on best-so-far)."
                 )
+            outside = sum(r.get("n_out_of_bounds", 0) for r in successful)
+            if outside:
+                print(
+                    f"\nWarning: {outside} run(s) returned a best_x outside the search bounds; "
+                    "those results aren't comparable with in-bounds ones."
+                )
             mismatched = sum(r.get("n_cost_mismatch", 0) for r in successful)
             if mismatched:
                 print(
@@ -616,6 +660,7 @@ class BenchmarkRunner:
             "time_median": float(np.median(times)),
             "n_evals_mean": float(np.mean([r.get("n_evals", np.nan) for r in successful])),
             "n_cost_mismatch": sum(1 for r in successful if r.get("cost_mismatch")),
+            "n_out_of_bounds": sum(1 for r in successful if r.get("out_of_bounds")),
         }
 
 
@@ -676,6 +721,13 @@ class MOBenchmarkRunner:
         for ``BenchmarkRunner``. A run that hits the budget is scored on the
         non-dominated set of every objective vector it evaluated
         (``status="budget_exhausted"``).
+    verify : bool, default=True
+        Re-evaluate the problem at every returned decision vector (not counted
+        against the budget) and score those objective values instead of the
+        reported ``F``, as ``BenchmarkRunner`` does for ``best_cost``.
+        ``n_mismatched`` counts the points whose reported objectives disagreed.
+        This costs one evaluation per returned point. With ``verify=False`` the
+        reported ``F`` is scored unchecked and ``X`` is ignored.
 
     Attributes
     ----------
@@ -700,6 +752,7 @@ class MOBenchmarkRunner:
         verbose: bool = True,
         n_objectives: Optional[int] = None,
         max_evals: Optional[Budget] = None,
+        verify: bool = True,
     ):
         self.algorithm = algorithm
         self.algorithm_name = algorithm_name or "UnnamedMOAlgorithm"
@@ -707,6 +760,7 @@ class MOBenchmarkRunner:
         self.verbose = verbose
         self.n_objectives = n_objectives
         self.max_evals = max_evals
+        self.verify = verify
         self.results: List[Dict[str, Any]] = []
 
     def run_single(
@@ -759,12 +813,16 @@ class MOBenchmarkRunner:
         # that one function's result.
         start_time = time.time()
         status = "success"
+        X: Any = None
         try:
             try:
-                _, F = self.algorithm(archive, bounds, n_objectives, **algorithm_kwargs)
+                X, F = self.algorithm(archive, bounds, n_objectives, **algorithm_kwargs)
             except BudgetExhausted:
+                # The archive holds what the problem actually returned, so there's
+                # nothing to verify.
                 status = "budget_exhausted"
                 F = archive.objectives
+                X = None
             elapsed = time.time() - start_time
         except Exception as e:
             return {
@@ -776,15 +834,55 @@ class MOBenchmarkRunner:
                 "n_evals": archive.n_evals,
             }
 
-        F = np.asarray(F, dtype=float).reshape(-1, n_objectives)
-        if F.shape[0] == 0:
-            return {
+        def failure(status: str, message: Optional[str] = None) -> Dict[str, Any]:
+            result = {
                 **base,
-                "status": "failed",
+                "status": status,
                 "time": float(elapsed),
                 "success": False,
                 "n_evals": archive.n_evals,
             }
+            if message is not None:
+                result["error_message"] = message
+            return result
+
+        # Validate inside try: a malformed (X, F) must fail this function only, not
+        # raise out of run_suite.
+        try:
+            F = np.atleast_2d(np.asarray(F, dtype=float))
+        except (TypeError, ValueError) as e:
+            return failure("invalid_result", f"malformed F: {e}")
+        if F.size == 0:
+            return failure("failed")
+        if F.ndim != 2 or F.shape[1] != n_objectives:
+            return failure(
+                "invalid_result",
+                f"F has shape {F.shape}, expected (n_points, {n_objectives})",
+            )
+
+        n_mismatched: Optional[int] = None
+        if self.verify and X is not None:
+            try:
+                X = np.atleast_2d(np.asarray(X, dtype=float))
+            except (TypeError, ValueError) as e:
+                return failure("invalid_result", f"malformed X: {e}")
+            if X.shape != (F.shape[0], dim):
+                return failure(
+                    "invalid_result",
+                    f"X has shape {X.shape}, expected ({F.shape[0]}, {dim}) to match F",
+                )
+            try:
+                verified = np.array([np.asarray(func(x), dtype=float) for x in X])
+            except Exception as e:
+                return failure("exception", f"evaluating the returned X failed: {e}")
+            n_mismatched = int(
+                np.sum(
+                    ~np.all(np.isclose(F, verified, rtol=_VERIFY_RTOL, atol=_VERIFY_ATOL), axis=1)
+                )
+            )
+            F = verified
+        if not np.all(np.isfinite(F)):
+            return failure("invalid_result", "F contains NaN or infinite objective values")
         front = non_dominated_front(F)
         true_front = get_pareto_front(function_name, n_objectives=n_objectives)
         ref = (
@@ -799,6 +897,7 @@ class MOBenchmarkRunner:
             "n_nondominated": int(front.shape[0]),
             "igd": igd(front, true_front),
             "hypervolume": hypervolume(front, ref, seed=self.seed),
+            "n_mismatched": n_mismatched,
             "n_evals": archive.n_evals,
             "max_evals": archive.max_evals,
             "time": float(elapsed),

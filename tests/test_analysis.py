@@ -301,3 +301,109 @@ def test_importing_bananabench_does_not_import_scipy():
     code = "import sys, bananabench; print('scipy' in sys.modules)"
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
     assert out.stdout.strip() == "False"
+
+
+def _evaluates_center(func, bounds):
+    """The most center-biased algorithm possible: evaluates only the box center."""
+    low, high = np.array(bounds, dtype=float).T
+    x = (low + high) / 2
+    return x, func(x)
+
+
+def _random_search(func, bounds, n=100):
+    low, high = np.array(bounds, dtype=float).T
+    best_x, best_f = None, np.inf
+    for _ in range(n):
+        x = np.random.uniform(low, high)
+        fx = func(x)
+        if fx < best_f:
+            best_x, best_f = x, fx
+    return best_x, best_f
+
+
+class TestCenterBias:
+    def test_center_seeking_algorithm_is_flagged(self):
+        result = analysis.center_bias_test(
+            _evaluates_center, functions=["sphere", "rastrigin"], n_runs=2, seed=0
+        )
+        # Exact optimum unshifted (error floored at 1e-8), far off once shifted.
+        assert result["unshifted_error"]["sphere"] == 1e-8
+        assert result["shifted_error"]["sphere"] > 1.0
+        assert result["center_biased"] is True
+        assert result["geometric_mean"] > 1e6
+        assert "CENTER-BIASED" in result["report"]
+
+    def test_random_search_is_not_flagged(self):
+        result = analysis.center_bias_test(
+            _random_search, functions=["sphere", "ackley", "griewank"], n_runs=3, seed=0
+        )
+        assert result["center_biased"] is False
+        assert 0.1 < result["geometric_mean"] < 10
+        assert "no center bias detected" in result["report"]
+
+    def test_shift_moves_optimum_by_minus_s(self):
+        # sphere on [-100, 100]: s = 0.1 * 200 = 20, so f(x + s) is 0 at x = -20.
+        def evaluates_minus_s(func, bounds):
+            x = np.full(len(bounds), -20.0)
+            return x, func(x)
+
+        result = analysis.center_bias_test(evaluates_minus_s, functions=["sphere"], n_runs=1)
+        assert result["shifted_error"]["sphere"] == 1e-8
+        assert result["unshifted_error"]["sphere"] > 1.0
+
+    def test_scores_evaluated_values_not_reports(self):
+        def lies(func, bounds):
+            func(np.zeros(len(bounds)))
+            return np.zeros(len(bounds)), -1e9
+
+        result = analysis.center_bias_test(lies, functions=["sphere"], n_runs=1)
+        # sphere(0) = 0 unshifted; shifted, the same point is worth sphere(s) = 10 * 20^2.
+        assert result["unshifted_error"]["sphere"] == 1e-8
+        assert result["shifted_error"]["sphere"] == pytest.approx(4000.0)
+
+    def test_algorithm_that_never_evaluates_is_inconclusive(self):
+        result = analysis.center_bias_test(
+            lambda f, b: (np.zeros(len(b)), 0.0), functions=["sphere"], n_runs=1
+        )
+        assert np.isnan(result["geometric_mean"])
+        assert result["center_biased"] is False
+        assert "inconclusive" in result["report"]
+
+    def test_budget_is_enforced(self):
+        calls = []
+
+        def counting(func, bounds):
+            while True:
+                calls.append(1)
+                func(np.zeros(len(bounds)))
+
+        analysis.center_bias_test(counting, functions=["sphere"], n_runs=2, max_evals=7)
+        assert len(calls) == 2 * 2 * 8  # 2 variants x 2 runs, the 8th call raises
+
+    def test_paired_seeds_make_runs_reproducible(self):
+        kwargs = dict(functions=["sphere"], n_runs=2, seed=3)
+        a = analysis.center_bias_test(_random_search, **kwargs)
+        b = analysis.center_bias_test(_random_search, **kwargs)
+        assert a["ratios"] == b["ratios"]
+
+    @pytest.mark.parametrize(
+        "kwargs",
+        [{"shift_fraction": 0.5}, {"shift_fraction": 0.0}, {"n_runs": 0}, {"functions": []}],
+    )
+    def test_invalid_arguments_raise(self, kwargs):
+        with pytest.raises(ValueError):
+            analysis.center_bias_test(_evaluates_center, **kwargs)
+
+    @pytest.mark.parametrize("name", analysis.CENTER_BIAS_FUNCTIONS)
+    def test_shifted_region_never_undercuts_known_minimum(self, name):
+        # The shifted function is evaluated up to 10% of the range outside the box,
+        # where nothing guarantees f >= known_minimum. Check it holds there.
+        from bananabench.metadata import BENCHMARK_SUITE, get_bounds
+
+        info = BENCHMARK_SUITE[name]
+        low, high = np.array(get_bounds(name), dtype=float).T
+        shift = 0.1 * (high - low)
+        rng = np.random.default_rng(0)
+        values = [info["function"](rng.uniform(low, high) + shift) for _ in range(2000)]
+        values.append(info["function"](high + shift))
+        assert min(values) >= info["known_minimum"] - 1e-6 * max(1.0, abs(info["known_minimum"]))

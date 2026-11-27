@@ -141,6 +141,30 @@ class TestApproximateOptima:
             )
 
 
+@pytest.mark.filterwarnings("ignore:maxmod is deprecated:DeprecationWarning")
+@pytest.mark.parametrize("name", sorted(BENCHMARK_SUITE))
+def test_no_point_in_domain_undercuts_known_minimum(name):
+    """Every function, not only the approximate ones: a value below known_minimum
+    anywhere in the domain means the documented minimum is wrong. `step2` and
+    `plateau` claimed 30 at x = 0 until this test found 0 at the domain's corner, so
+    the box corners are sampled as well as uniform points."""
+    info = BENCHMARK_SUITE[name]
+    bounds = np.array(get_bounds(name), dtype=float)
+    low, high = bounds[:, 0], bounds[:, 1]
+    rng = np.random.default_rng(0)
+    points = list(rng.uniform(low, high, size=(500, low.size)))
+    if low.size <= 10:
+        for mask in range(2**low.size):
+            bits = np.array([(mask >> i) & 1 for i in range(low.size)], dtype=bool)
+            points.append(np.where(bits, high, low))
+    tol = 1e-6 * max(1.0, abs(info["known_minimum"]))
+    worst = min(points, key=info["function"])
+    value = info["function"](worst)
+    assert value >= info["known_minimum"] - tol, (
+        f"{name}({worst}) = {value} undercuts known_minimum={info['known_minimum']}"
+    )
+
+
 class TestFunctionProperties:
     """General numerical properties every registered function should have."""
 

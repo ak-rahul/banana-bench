@@ -33,6 +33,9 @@ References
        black-box setting. Optimization Methods and Software, 36(1), 114-144.
 .. [10] Demšar, J. (2006). Statistical comparisons of classifiers over multiple
         data sets. Journal of Machine Learning Research, 7, 1-30.
+.. [11] Kudela, J. (2022). A critical problem in benchmarking and analysis of
+        evolutionary computation methods. Nature Machine Intelligence, 4,
+        1238-1245. (The center-bias test, ``analysis.center_bias_test``.)
 
 License: MIT
 """

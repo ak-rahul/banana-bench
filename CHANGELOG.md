@@ -57,6 +57,16 @@ functionality from that history carries forward unchanged.
   - the Friedman test with the Iman–Davenport correction;
   - the Nemenyi critical difference;
   - pairwise Wilcoxon signed-rank tests with Holm's (1979) correction.
+- `analysis.center_bias_test(algorithm, ...)`: Kudela's (2022) test for
+  center bias. Most classic functions have their optimum at the center of the
+  box, so an algorithm that pulls its search toward the center looks far better
+  than it is. Kudela's follow-up study found 47 of 90 published methods doing
+  this. The test runs the algorithm on each function and on a copy shifted by
+  10% of the range, and flags the algorithm when the geometric mean of the
+  shifted-to-unshifted error ratios exceeds 10. It follows Kudela's protocol and
+  defaults to the 10 functions of his test set that the suite has
+  (`analysis.CENTER_BIAS_FUNCTIONS`). Runs are scored on what they actually
+  evaluated. See `examples/14_center_bias.py`.
 
   It returns structured results plus a text `report`. It requires SciPy,
   available through the new `stats` extra (`pip install 'banana-bench[stats]'`).
@@ -94,6 +104,8 @@ functionality from that history carries forward unchanged.
     a runtime ECDF and a statistical comparison.
   - `examples/13_many_objective_dtlz.py`: DTLZ with three and five objectives,
     exact and Monte Carlo hypervolume.
+  - `examples/14_center_bias.py`: two hill climbers that differ in one line,
+    one of them pulled toward the center, and the test telling them apart.
 
   The user guide gains sections on evaluation budgets, profiles, statistical
   comparison and many-objective problems, and `docs/BENCHMARK_FUNCTIONS.md` a
@@ -108,6 +120,17 @@ functionality from that history carries forward unchanged.
   its `error` was computed from it unchecked. Numbers change only for
   algorithms whose reported cost was wrong; `verify=False` restores the old
   behavior.
+- `MOBenchmarkRunner` verifies too (`verify=True` by default). It re-evaluates
+  the problem at every returned point in `X` (not counted against the budget)
+  and scores those objectives instead of the reported `F`. `n_mismatched`
+  counts the points whose report disagreed.
+- `BenchmarkRunner` validates the reported result. A `best_x` without exactly
+  `dim` entries or with NaN/inf, or a `best_cost` that isn't a number, is now
+  an `invalid_result`. A wrong-length `best_x` was previously scored as a
+  success on scalable functions, and a non-numeric `best_cost` raised out of
+  `run_suite` and lost every other function's result. A `best_x` outside the
+  search bounds is still scored but flagged `out_of_bounds=True`, counted in
+  `n_out_of_bounds`, and warned about in `print_summary`.
 - `multiobjective.hypervolume` supports any number of objectives instead of
   raising `NotImplementedError` above two. It is exact by default: a sweep for
   2 objectives, slicing for 3, and the WFG algorithm (While, Bradstreet & Barone
@@ -155,6 +178,22 @@ functionality from that history carries forward unchanged.
   `:12.6f`, so `gear`'s ~2.7e-12 known minimum showed as `0.000000`. They now
   share a single formatter with every CLI `--list` table and
   `metadata.get_function_list()`, which previously each kept their own copy.
+- `step2` and `plateau` documented a global minimum of 30 at `x = 0`, but
+  `floor` goes negative across their domain: both reach 0 on the corner
+  plateau `x_i in [-5.12, -5)`, where every `floor(x_i) = -6`. This is De
+  Jong's F3 step function, and its reference implementation (Baeck's
+  `f_3.c`) gives the same minimum. The function values are unchanged.
+  `known_minimum` is now 0 and `optimal_point` is `-5.06` in every coordinate,
+  so any `error` recorded against the old minimum of 30 was off by 30. A new
+  test samples every function's domain, including the box corners, and fails
+  if any point undercuts its documented minimum. It's what found these two.
+- `save_results(format="json")` wrote `NaN` and `Infinity` for non-finite
+  values, which aren't valid JSON, so strict parsers (JavaScript, `jq`, most
+  other languages) rejected the whole file. They're now written as `null`.
+- `MOBenchmarkRunner.run_single` raised `ValueError` when an algorithm
+  returned `F` with the wrong number of objectives, taking down the whole
+  `run_suite`. It's now an `invalid_result` for that function, as are
+  non-finite objective values, which were previously scored with `igd=nan`.
 
 ## [0.3.0] - 2026-11-26
 

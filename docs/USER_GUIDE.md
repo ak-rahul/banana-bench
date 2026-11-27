@@ -204,7 +204,13 @@ function raises `BudgetExhausted`, and the runner scores the best point the run 
 algorithm's reported `best_x` and scores that value. This re-evaluation isn't counted against the
 budget. The algorithm's own figure is kept as `reported_cost`, and `cost_mismatch=True` marks a run
 whose report didn't match what its point actually achieves. A buggy optimizer can't post a perfect
-score it didn't earn. Pass `verify=False` to score reported costs unchecked.
+score it didn't earn. Pass `verify=False` to score reported costs unchecked. Results are checked
+either way: a `best_x` of the wrong length or with NaN values is an `invalid_result`, and a
+`best_x` outside the search bounds gets `out_of_bounds=True`. `MOBenchmarkRunner` verifies too,
+re-evaluating every returned point in `X`.
+
+`save_results(..., format='json')` writes strict JSON: NaN and infinite values become `null`, so
+any JSON parser can read the file.
 
 `TrackedFunction` also works on its own, around any function:
 
@@ -289,6 +295,30 @@ result['pairwise']             # per-pair p-values, Holm-adjusted p-values, and 
 Each algorithm is summarized per function by its mean `metric` over successful runs. A function
 with no successful run ranks it last. Use `metric='n_evals'` or `metric='time'` to compare cost
 instead of quality.
+
+### Testing for Center Bias
+
+Most classic benchmark functions (sphere, Rastrigin, Ackley, Griewank, ...) have their optimum at
+the origin, the exact center of a symmetric box. An algorithm that drifts toward the center, by
+design or through a flawed operator, looks excellent on them, and the advantage disappears on
+real problems. Kudela (2022) showed published methods doing this, and his follow-up found 47 of 90
+methods center-biased. Before trusting good results on these functions, check:
+
+```python
+from bananabench.analysis import center_bias_test
+
+result = center_bias_test(my_optimizer, n_runs=20, max_evals=lambda d: 1000 * d, seed=0)
+print(result['report'])
+result['center_biased']        # True when the geometric-mean ratio is above 10
+result['ratios']               # {function: shifted mean error / unshifted mean error}
+```
+
+The test runs your algorithm on each function and again with the optimum moved by 10% of the
+range, keeping the same bounds. An unbiased algorithm does about as well either way, so its ratios
+stay near 1. The default functions include `schwefel2_26`, whose optimum isn't at the center, as a
+control: its ratio should stay near 1 even for a biased algorithm. To make your own comparisons
+robust to this, also benchmark on shifted functions (`ShiftedFunction`, or `cec.CECFunction` with a
+`shift_vector`). See `examples/14_center_bias.py`.
 
 ## 🧩 Advanced Usage
 

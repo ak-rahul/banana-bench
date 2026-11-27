@@ -840,10 +840,13 @@ def paviani(x: np.ndarray) -> float:
 
 def plateau(x: np.ndarray) -> float:
     """
-    Plateau function.
+    Plateau function (De Jong's F3 step function).
     Domain: |x_i| ≤ 5.12.
     Dimension: 5 (fixed).
-    Global minimum: 30, attained on the whole plateau x_i in [0, 1), not just at x = 0.
+    Global minimum: 0, on the whole corner plateau x_i in [-5.12, -5), where every
+    floor(x_i) = -6. (Not 30 at x = 0: floor goes negative across the domain.)
+
+    References: De Jong (1975), function F3; Baeck's f_3.c reference implementation.
     """
     x = np.asarray(x, dtype=float)
     _check_dim(x, 5, "plateau")
@@ -1143,10 +1146,12 @@ def step(x: np.ndarray) -> float:
 
 def step2(x: np.ndarray) -> float:
     """
-    Step function #2.
+    Step function #2 (De Jong's F3 generalized to n dimensions).
     Domain: |x_i| ≤ 5.12.
     Dimension: n.
-    Global minimum: f = 6·n at x = 0 (e.g. f = 30 for n = 5).
+    Global minimum: f = 0 on the corner plateau x_i in [-5.12, -5), where every
+    floor(x_i) = -6, for any n. (Not 6·n at x = 0: floor goes negative across the
+    domain.)
     """
     x = np.asarray(x, dtype=float)
     return 6 * x.size + np.sum(np.floor(x))

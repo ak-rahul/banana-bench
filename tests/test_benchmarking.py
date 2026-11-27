@@ -618,3 +618,114 @@ class TestMOResultsOutput:
     def test_summary_stats_with_no_results(self):
         stats = MOBenchmarkRunner(random_search_mo, verbose=False).get_summary_stats()
         assert stats == {"n_results": 0, "n_successful": 0}
+
+
+class TestResultValidation:
+    @staticmethod
+    def _run(algorithm, func="sphere", dim=3):
+        runner = BenchmarkRunner(algorithm, "probe", verbose=False, show_progress=False)
+        return runner.run_single(func, dim)
+
+    def test_wrong_length_best_x_is_invalid(self):
+        # sphere accepts any length, so verification alone can't catch this.
+        result = self._run(lambda f, b: (np.zeros(len(b) + 1), 0.0))
+        assert result["status"] == "invalid_result"
+        assert "expected 3" in result["error_message"]
+
+    def test_malformed_cost_fails_one_run_not_the_suite(self):
+        runner = BenchmarkRunner(
+            lambda f, b: (np.zeros(len(b)), "not a number"),
+            "bad",
+            verbose=False,
+            show_progress=False,
+        )
+        results = runner.run_suite(functions=["sphere", "ackley"], dimensions={"sphere": 2})
+        assert [r["n_successful"] for r in results] == [0, 0]
+        assert all(r["status"] == "invalid_result" for r in runner.results)
+
+    def test_out_of_bounds_best_x_is_flagged(self):
+        def outside(func, bounds):
+            x = np.array([hi for _, hi in bounds]) + 1.0
+            return x, func(x)
+
+        result = self._run(outside)
+        assert result["success"] is True
+        assert result["out_of_bounds"] is True
+        assert self._run(lambda f, b: (np.zeros(len(b)), 0.0))["out_of_bounds"] is False
+
+    def test_out_of_bounds_counted_in_summaries(self, capsys):
+        def outside(func, bounds):
+            x = np.array([hi for _, hi in bounds]) + 1.0
+            return x, func(x)
+
+        runner = BenchmarkRunner(outside, "out", n_runs=2, verbose=False, show_progress=False)
+        results = runner.run_suite(functions=["sphere"], dimensions={"sphere": 2})
+        assert results[0]["n_out_of_bounds"] == 2
+        assert runner.get_summary_stats()["n_out_of_bounds"] == 2
+        runner.print_summary(results)
+        assert "outside the search bounds" in capsys.readouterr().out
+
+    def test_json_output_is_strict_json(self, tmp_path):
+        runner = BenchmarkRunner(
+            lambda f, b: (np.zeros(len(b)), float("inf")),
+            "inf",
+            verbose=False,
+            show_progress=False,
+        )
+        runner.run_suite(functions=["sphere"], dimensions={"sphere": 2})
+        path = tmp_path / "r.json"
+        runner.save_results(path, format="json")
+        text = path.read_text()
+        assert "Infinity" not in text and "NaN" not in text
+
+        def reject(constant):
+            raise ValueError(constant)
+
+        loaded = json.loads(text, parse_constant=reject)
+        assert loaded[0]["reported_cost"] is None
+
+
+def _mo_returning(F, X=None):
+    def algorithm(func, bounds, n_objectives):
+        x = np.zeros((len(np.atleast_2d(F)), len(bounds))) if X is None else X
+        return x, F
+
+    return algorithm
+
+
+class TestMOResultValidation:
+    def test_wrong_objective_count_is_invalid_not_raised(self):
+        result = MOBenchmarkRunner(_mo_returning(np.zeros((3, 3))), verbose=False).run_single(
+            "zdt1", dim=5
+        )
+        assert result["status"] == "invalid_result"
+        assert "expected (n_points, 2)" in result["error_message"]
+
+    def test_non_finite_objectives_are_invalid_without_verification(self):
+        runner = MOBenchmarkRunner(
+            _mo_returning(np.full((3, 2), np.nan)), verbose=False, verify=False
+        )
+        assert runner.run_single("zdt1", dim=5)["status"] == "invalid_result"
+
+    def test_verification_scores_true_objectives(self):
+        # Claims the ideal point (0, 0), which no ZDT1 solution reaches.
+        lying = _mo_returning(np.zeros((4, 2)), X=np.full((4, 5), 0.5))
+        result = MOBenchmarkRunner(lying, verbose=False).run_single("zdt1", dim=5)
+        assert result["success"] is True
+        assert result["n_mismatched"] == 4
+        assert result["igd"] > 0.1
+        unchecked = MOBenchmarkRunner(lying, verbose=False, verify=False).run_single("zdt1", dim=5)
+        assert unchecked["n_mismatched"] is None
+        assert result["hypervolume"] < unchecked["hypervolume"]
+
+    def test_honest_algorithm_has_no_mismatches(self):
+        result = MOBenchmarkRunner(random_search_mo, verbose=False, seed=1).run_single(
+            "dtlz2", n_points=10
+        )
+        assert result["n_mismatched"] == 0
+
+    def test_x_not_matching_f_is_invalid(self):
+        bad = _mo_returning(np.zeros((4, 2)), X=np.zeros((3, 5)))
+        result = MOBenchmarkRunner(bad, verbose=False).run_single("zdt1", dim=5)
+        assert result["status"] == "invalid_result"
+        assert "to match F" in result["error_message"]

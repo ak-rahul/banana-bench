@@ -18,6 +18,10 @@ across a set of problems, rather than by one aggregate number:
   Iman–Davenport correction and Nemenyi critical difference, plus pairwise
   Wilcoxon signed-rank tests with Holm's step-down correction. This part needs
   SciPy (``pip install 'banana-bench[stats]'``).
+- **Center-bias test** (Kudela 2022): runs an algorithm on functions whose
+  optimum sits at the center of the box, then on the same functions shifted by
+  10% of the range. An algorithm that does much worse once the optimum moves is
+  exploiting the benchmark's symmetry, not searching well.
 
 The profile functions take plain mappings, so they work on any data, not only
 ``BenchmarkRunner`` output. The ``*_from_runners`` adapters build those inputs
@@ -40,6 +44,12 @@ References
        data sets. Journal of Machine Learning Research, 7, 1-30.
 .. [6] Holm, S. (1979). A simple sequentially rejective multiple test
        procedure. Scandinavian Journal of Statistics, 6(2), 65-70.
+.. [7] Kudela, J. (2022). A critical problem in benchmarking and analysis of
+       evolutionary computation methods. Nature Machine Intelligence, 4,
+       1238-1245. doi:10.1038/s42256-022-00579-0
+.. [8] Kudela, J. (2023). The evolutionary computation methods no one should
+       use. arXiv:2301.01984. (The shifted-vs-unshifted protocol and the
+       geometric-mean > 10 criterion used by ``center_bias_test``.)
 
 License: MIT
 """
@@ -69,6 +79,8 @@ __all__ = [
     "ert_from_runners",
     "performance_profile_from_runners",
     "statistical_comparison",
+    "CENTER_BIAS_FUNCTIONS",
+    "center_bias_test",
 ]
 
 #: COCO's default target precisions: 51 values from 10^2 down to 10^-8, evenly
@@ -693,5 +705,200 @@ def statistical_comparison(
         "friedman": friedman,
         "critical_difference": critical_difference,
         "pairwise": pairwise,
+        "report": "\n".join(lines),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Center-bias test
+# ---------------------------------------------------------------------------
+
+#: The functions of Kudela's test set (2023, Table 1) that this package has:
+#: optimum at or near the center of the box, except ``schwefel2_26`` (optimum near
+#: 420.97 of [-500, 500]), which Kudela includes as a control. His quartic-with-noise
+#: and two penalized functions aren't in the suite. None of these undercuts its
+#: known minimum anywhere in the shifted region it's evaluated on (checked in
+#: tests/test_analysis.py).
+CENTER_BIAS_FUNCTIONS = (
+    "sphere",
+    "schwefel2_22",
+    "schwefel1_2",
+    "schwefel2_21",
+    "rosenbrock",
+    "step",
+    "schwefel2_26",
+    "rastrigin",
+    "ackley",
+    "griewank",
+)
+
+_CENTER_BIAS_ERROR_FLOOR = 1e-8
+
+
+def center_bias_test(
+    algorithm: Any,
+    functions: Optional[Sequence[str]] = None,
+    dim: Optional[int] = None,
+    n_runs: int = 20,
+    max_evals: Optional[Any] = None,
+    shift_fraction: float = 0.1,
+    threshold: float = 10.0,
+    seed: Optional[int] = None,
+    **algorithm_kwargs: Any,
+) -> Dict[str, Any]:
+    """
+    Kudela's center-bias test: does the algorithm only do well when the optimum
+    is at the center of the search space?
+
+    Most classic benchmark functions have their optimum at the origin, the center
+    of a symmetric box. An algorithm that pulls its search toward the center
+    (deliberately or through a flawed operator) looks excellent on them, and the
+    advantage vanishes on real problems. Kudela (2022) showed several published
+    methods do this, and his follow-up (2023) found 47 of 90 methods
+    center-biased with this test.
+
+    The test runs the algorithm on each function ``f`` and on ``f(x + s)``, with
+    ``s`` equal to ``shift_fraction`` times each coordinate's range width, so the
+    optimum moves by ``-s`` but stays inside the box. Search bounds are unchanged.
+    For each function, the ratio is the mean error on the shifted function over
+    the mean error on the original, with errors floored at 1e-8 as Kudela does.
+    The statistic is the geometric mean of those ratios, which damps
+    single-function flukes. An algorithm without center bias scores around 1, and
+    a value above ``threshold`` (Kudela's 10) flags center bias.
+
+    Parameters
+    ----------
+    algorithm : callable
+        ``algorithm(func, bounds, **kwargs) -> (best_x, best_cost)``, as for
+        ``BenchmarkRunner``. Each run is scored on the best value the algorithm
+        actually evaluated (tracked, not reported), so a wrong report can't skew
+        the test.
+    functions : sequence of str, optional
+        Names from ``BENCHMARK_SUITE``. Defaults to ``CENTER_BIAS_FUNCTIONS``.
+        Only use functions that are defined, and don't undercut their known
+        minimum, beyond their box: the shifted function is evaluated up to
+        ``shift_fraction`` of the range outside it.
+    dim : int, optional
+        Dimension for every function (Kudela uses 30). Defaults to each
+        function's ``default_dim``.
+    n_runs : int, default=20
+        Runs per function and variant (Kudela uses 20). Run ``i`` gets the same
+        seed on both variants, so the comparison is paired.
+    max_evals : int or callable, optional
+        Evaluation budget per run, a count or a function of the dimension, as for
+        ``BenchmarkRunner``. Kudela uses 50,000 at dimension 30.
+    shift_fraction : float, default=0.1
+        Shift as a fraction of each coordinate's range width. Must be in (0, 0.5)
+        so a centered optimum stays inside the box.
+    threshold : float, default=10.0
+        Geometric-mean ratio above which the algorithm is reported center-biased.
+    seed : int, optional
+        Seeds the per-run seeds, which are set with ``np.random.seed`` before each
+        run, as ``BenchmarkRunner`` does.
+    **algorithm_kwargs
+        Passed to the algorithm.
+
+    Returns
+    -------
+    dict
+        ``ratios``, ``unshifted_error`` and ``shifted_error`` (each
+        ``{function: value}``), ``geometric_mean``, ``threshold``,
+        ``center_biased`` and a printable ``report``.
+
+    Examples
+    --------
+    >>> result = center_bias_test(my_optimizer, n_runs=5, max_evals=lambda d: 1000 * d)
+    >>> print(result["report"])  # doctest: +SKIP
+    """
+    from .benchmarking import _resolve_budget
+    from .metadata import get_function_info
+    from .tracking import BudgetExhausted, TrackedFunction
+    from .utils import normalize_bounds
+
+    if not 0 < shift_fraction < 0.5:
+        raise ValueError("shift_fraction must be in (0, 0.5).")
+    if n_runs < 1:
+        raise ValueError("n_runs must be at least 1.")
+    names = list(functions) if functions is not None else list(CENTER_BIAS_FUNCTIONS)
+    if not names:
+        raise ValueError("center_bias_test needs at least one function.")
+    rng = np.random.default_rng(seed)
+    run_seeds = [int(v) for v in rng.integers(0, 2**31 - 1, size=n_runs)]
+
+    def mean_error(func: Any, bounds: Any, known_min: float, budget: Optional[int]) -> float:
+        errors = []
+        for run_seed in run_seeds:
+            np.random.seed(run_seed)
+            tracked = TrackedFunction(func, max_evals=budget, record_trace=False)
+            try:
+                algorithm(tracked, bounds, **algorithm_kwargs)
+            except BudgetExhausted:
+                pass
+            best = tracked.best_f
+            error = np.inf if best is None else max(best - known_min, 0.0)
+            errors.append(max(error, _CENTER_BIAS_ERROR_FLOOR))
+        return float(np.mean(errors))
+
+    unshifted: Dict[str, float] = {}
+    shifted: Dict[str, float] = {}
+    ratios: Dict[str, float] = {}
+    for name in names:
+        info = get_function_info(name)
+        d = dim or info["default_dim"]
+        bounds = normalize_bounds(info["bounds"], d)
+        box = np.asarray(bounds, dtype=float)
+        shift = shift_fraction * (box[:, 1] - box[:, 0])
+        base = info["function"]
+        budget = _resolve_budget(max_evals, d)
+
+        def shifted_func(x: Any, _f: Any = base, _s: Any = shift) -> float:
+            return _f(np.asarray(x, dtype=float) + _s)
+
+        known_min = float(info["known_minimum"])
+        unshifted[name] = mean_error(base, bounds, known_min, budget)
+        shifted[name] = mean_error(shifted_func, bounds, known_min, budget)
+        ratios[name] = shifted[name] / unshifted[name]
+
+    # A ratio is NaN only when both variants failed to evaluate anything (inf / inf);
+    # that function carries no evidence either way, so it's left out. An infinite
+    # ratio (only the shifted variant failed) is kept and makes the verdict biased.
+    defined = [r for r in ratios.values() if not np.isnan(r)]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        geometric_mean = float(np.exp(np.mean(np.log(defined)))) if defined else float("nan")
+    center_biased = bool(geometric_mean > threshold)
+
+    width = max(len("Function"), *(len(n) for n in names))
+    lines = [
+        "=" * 78,
+        f"CENTER-BIAS TEST (Kudela 2022): shift = {shift_fraction:g} x range, {n_runs} runs",
+        "=" * 78,
+        f"{'Function':<{width}} | {'Mean error':>12} | {'Shifted':>12} | {'Ratio':>10}",
+        "-" * 78,
+    ]
+    for name in names:
+        lines.append(
+            f"{name:<{width}} | {unshifted[name]:>12.4g} | {shifted[name]:>12.4g} | "
+            f"{ratios[name]:>10.3g}"
+        )
+    lines.append("-" * 78)
+    if np.isnan(geometric_mean):
+        verdict = "inconclusive: the algorithm evaluated nothing on any function"
+    elif center_biased:
+        verdict = f"CENTER-BIASED (> {threshold:g}): results depend on the optimum being centered"
+    else:
+        verdict = f"no center bias detected (<= {threshold:g})"
+    lines.append(f"Geometric mean ratio: {geometric_mean:.3g}, {verdict}")
+    lines.append("=" * 78)
+
+    return {
+        "functions": names,
+        "ratios": ratios,
+        "unshifted_error": unshifted,
+        "shifted_error": shifted,
+        "geometric_mean": geometric_mean,
+        "threshold": threshold,
+        "center_biased": center_biased,
+        "shift_fraction": shift_fraction,
+        "n_runs": n_runs,
         "report": "\n".join(lines),
     }

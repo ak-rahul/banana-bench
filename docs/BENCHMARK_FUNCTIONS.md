@@ -53,7 +53,7 @@ Total functions: 74
 | [neumaier_powersum](#neumaier_powersum) | 4D | [0, 4]^n | 0 |
 | [neumaier_trid](#neumaier_trid) | 6D | [-36, 36]^n | -50 |
 | [paviani](#paviani) | 10D | [2.0001, 9.9999]^n | -45.7785 |
-| [plateau](#plateau) | 5D | [-5.12, 5.12]^n | 30 |
+| [plateau](#plateau) | 5D | [-5.12, 5.12]^n | 0 |
 | [powell](#powell) | 4D | [-4, 5]^n | 0 |
 | [rastrigin](#rastrigin) | 10D | [-5.12, 5.12]^n | 0 |
 | [rastrigin2](#rastrigin2) | 2D | [-5.12, 5.12]^n | -2 |
@@ -75,7 +75,7 @@ Total functions: 74
 | [sphere](#sphere) | 10D | [-100, 100]^n | 0 |
 | [sphere2](#sphere2) | 10D | [-100, 100]^n | 0 |
 | [step](#step) | 10D | [-100, 100]^n | 2.5 |
-| [step2](#step2) | 5D | [-5.12, 5.12]^n | 30 |
+| [step2](#step2) | 5D | [-5.12, 5.12]^n | 0 |
 | [stretched_v](#stretched_v) | 3D | [-10, 10]^n | 0 |
 | [sum_squares](#sum_squares) | 10D | [-10, 10]^n | 0 |
 | [trecanni](#trecanni) | 2D | [-5, 5]^n | 0 |
@@ -1169,14 +1169,17 @@ print(f'result: {result}')
 ### plateau
 
 **Default Dimension:** 5
-**Known Minimum:** 30
-**Optimal Point:** `x = [0, 0, 0, 0, 0]`
+**Known Minimum:** 0
+**Optimal Point:** `x = [-5.06, -5.06, -5.06, -5.06, -5.06]`
 
 #### Description
-Plateau function.
+Plateau function (De Jong's F3 step function).
 Domain: |x_i| ≤ 5.12.
 Dimension: 5 (fixed).
-Global minimum: 30, attained on the whole plateau x_i in [0, 1), not just at x = 0.
+Global minimum: 0, on the whole corner plateau x_i in [-5.12, -5), where every
+floor(x_i) = -6. (Not 30 at x = 0: floor goes negative across the domain.)
+
+References: De Jong (1975), function F3; Baeck's f_3.c reference implementation.
 
 #### Code Example
 ```python
@@ -1724,14 +1727,16 @@ print(f'result: {result}')
 ### step2
 
 **Default Dimension:** 5
-**Known Minimum:** 30
-**Optimal Point:** `x = [0]`
+**Known Minimum:** 0
+**Optimal Point:** `x = [-5.06]`
 
 #### Description
-Step function #2.
+Step function #2 (De Jong's F3 generalized to n dimensions).
 Domain: |x_i| ≤ 5.12.
 Dimension: n.
-Global minimum: f = 6·n at x = 0 (e.g. f = 30 for n = 5).
+Global minimum: f = 0 on the corner plateau x_i in [-5.12, -5), where every
+floor(x_i) = -6, for any n. (Not 6·n at x = 0: floor goes negative across the
+domain.)
 
 #### Code Example
 ```python
