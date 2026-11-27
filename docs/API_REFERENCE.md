@@ -170,6 +170,19 @@ Run the algorithm on a single problem. `reference_point` overrides the default h
 reference point (1.1x the true front's per-objective max). Isolates an exception from your
 algorithm into a failure result dict rather than raising, matching `BenchmarkRunner.run_single`.
 
+**`save_results(filepath, format='csv')`**
+
+Save every result so far as `'csv'` or `'json'`, as `BenchmarkRunner.save_results` does. The CSV
+header is the union of keys across all results, so a suite mixing successes and failures still
+saves.
+
+**`get_summary_stats()`**
+
+Summary over successful runs: `n_results`, `n_successful`, `success_rate`, `igd_mean`,
+`igd_median`, `igd_std`, `igd_min`, `igd_max`, `time_total`, `time_mean`, `n_evals_mean`,
+`n_budget_exhausted`. There's no mean hypervolume: each problem has its own reference point, so
+hypervolumes from different problems aren't comparable. Compare them per problem instead.
+
 ### Extended Modules
 
 These modules are imported eagerly (`bananabench.analysis`, `.cec`, `.constraints`,

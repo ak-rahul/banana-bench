@@ -79,6 +79,11 @@ functionality from that history carries forward unchanged.
   counts evaluations. A run that hits its budget is scored on the
   non-dominated set of everything it evaluated. Hypervolume is now reported
   for every problem, not only bi-objective ones.
+- `MOBenchmarkRunner.save_results(filepath, format)` (CSV or JSON) and
+  `MOBenchmarkRunner.get_summary_stats()`, matching `BenchmarkRunner`.
+  Multi-objective results previously couldn't be saved without hand-written
+  code. The summary has no mean hypervolume, because each problem uses its own
+  reference point and the values aren't comparable across problems.
 - CLI: `--suite multiobjective` covers DTLZ, and a new `--objectives M` flag
   sets the number of objectives, e.g.
   `banana-bench --function dtlz2 --suite multiobjective --objectives 3 --values ...`.
@@ -112,6 +117,11 @@ functionality from that history carries forward unchanged.
   implementation for 2–5 objectives. Two-objective results are unchanged.
 - `get_mo_function_list()` and `MOBenchmarkRunner.run_suite()` (with no
   `functions`) now include the DTLZ problems as well as ZDT.
+- `import bananabench` is faster (about 0.5 s instead of 1 s in testing).
+  `bananabench.visualization` now imports matplotlib the first time a plot is
+  drawn, not when the package is imported. `MATPLOTLIB_AVAILABLE` still reports
+  whether matplotlib is installed, and the missing-matplotlib warning and
+  `ImportError` are unchanged. The CLI starts faster for the same reason.
 - CI: `test.yml` and `quality.yml` are merged into one `ci.yml` workflow,
   ending in a single `✅ CI passed` job for branch protection to require. A
   first `changes` job skips the test matrix and lint for docs-only changes

@@ -11,32 +11,37 @@ License: MIT
 
 # Defers evaluation of type annotations (PEP 563): several functions below are
 # annotated `-> plt.Figure`, and without this, Python evaluates that at import
-# time — which raises NameError (not the ImportError callers might expect)
-# when matplotlib isn't installed, since `plt` is only bound in the try block
-# below. bananabench/__init__.py relies on this module being importable
-# (with reduced functionality) even without matplotlib.
+# time — which raises NameError (not the ImportError callers might expect),
+# since `plt` is only bound once _check_matplotlib() has imported it.
+# bananabench/__init__.py relies on this module being importable (with reduced
+# functionality) even without matplotlib.
 from __future__ import annotations
 
+import importlib.util
 import warnings
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
-try:
-    import matplotlib.pyplot as plt
-    from matplotlib import cm
-    from mpl_toolkits.mplot3d import Axes3D
+from .metadata import BENCHMARK_SUITE, get_function_info
+from .utils import generate_grid_points, normalize_bounds
 
-    MATPLOTLIB_AVAILABLE = True
-except ImportError:
-    MATPLOTLIB_AVAILABLE = False
+# matplotlib is found here but imported on first use, in _check_matplotlib():
+# `import bananabench` loads this module, and importing pyplot eagerly added
+# ~0.5 s to every import of the package, plotting or not.
+MATPLOTLIB_AVAILABLE = importlib.util.find_spec("matplotlib") is not None
+if not MATPLOTLIB_AVAILABLE:
     warnings.warn(
         "matplotlib not installed. Visualization features will not be available. "
         "Install with: pip install matplotlib"
     )
 
-from .metadata import BENCHMARK_SUITE, get_function_info
-from .utils import generate_grid_points, normalize_bounds
+if TYPE_CHECKING:  # pragma: no cover
+    import matplotlib.pyplot as plt
+    from matplotlib import cm
+else:
+    plt = None
+    cm = None
 
 COLORMAPS = {
     "viridis": "viridis",
@@ -52,12 +57,21 @@ COLORMAPS = {
 
 
 def _check_matplotlib():
-    """Check if matplotlib is available."""
+    """Check that matplotlib is available, and import it on first use.
+
+    Every plotting function calls this before touching ``plt`` or ``cm``.
+    """
+    global plt, cm
     if not MATPLOTLIB_AVAILABLE:
         raise ImportError(
             "matplotlib is required for visualization. "
             "Install with: pip install 'banana-bench[viz]'"
         )
+    if plt is None:
+        import matplotlib.pyplot as _plt
+        from matplotlib import cm as _cm
+
+        plt, cm = _plt, _cm
 
 
 def _parse_optimal_point(optimal_point):

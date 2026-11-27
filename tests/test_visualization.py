@@ -71,6 +71,23 @@ def test_module_imports_cleanly_without_matplotlib(monkeypatch):
         importlib.reload(visualization)
 
 
+def test_matplotlib_is_imported_on_first_plot_not_on_package_import():
+    # Importing pyplot eagerly added ~0.5 s to every `import bananabench`. Run in a
+    # fresh interpreter, since this session has already imported matplotlib.
+    import subprocess
+    import sys
+
+    code = (
+        "import sys, bananabench; "
+        "before = 'matplotlib.pyplot' in sys.modules; "
+        "import matplotlib; matplotlib.use('Agg'); "
+        "bananabench.plot_function_2d('sphere', resolution=5); "
+        "print(before, 'matplotlib.pyplot' in sys.modules)"
+    )
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    assert out.stdout.strip() == "False True"
+
+
 class TestFunctionPlots:
     def test_plot_function_2d(self):
         fig = plot_function_2d("sphere", resolution=20, show_optimum=True)

@@ -289,3 +289,15 @@ class TestStatisticalComparison:
         monkeypatch.setattr(analysis, "SCIPY_AVAILABLE", False)
         with pytest.raises(ImportError, match="stats"):
             statistical_comparison(self._three())
+
+
+def test_importing_bananabench_does_not_import_scipy():
+    # scipy.stats takes ~1.5 s to import; loading it eagerly once doubled the import time
+    # of the whole package (and of every CLI call). Run in a fresh interpreter, since this
+    # session has already imported scipy.
+    import subprocess
+    import sys
+
+    code = "import sys, bananabench; print('scipy' in sys.modules)"
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    assert out.stdout.strip() == "False"

@@ -3,6 +3,7 @@ Tests for bananabench.benchmarking: BenchmarkRunner and quick_benchmark.
 """
 
 import csv
+import json
 import tempfile
 from pathlib import Path
 
@@ -567,3 +568,53 @@ class TestMOBudget:
     def test_budget_as_function_of_dimension(self):
         runner = MOBenchmarkRunner(random_search_mo, verbose=False, max_evals=lambda d: 2 * d)
         assert runner.run_single("zdt1", dim=5, n_points=100)["n_evals"] == 10
+
+
+class TestMOResultsOutput:
+    def _runner(self):
+        def sometimes_fails(func, bounds, n_objectives, **kwargs):
+            if len(bounds) == 7:
+                raise RuntimeError("boom")
+            return random_search_mo(func, bounds, n_objectives, **kwargs)
+
+        runner = MOBenchmarkRunner(sometimes_fails, "Mixed", verbose=False, seed=1, max_evals=20)
+        runner.run_suite(functions=["zdt1", "dtlz2"], dimensions={"zdt1": 5, "dtlz2": 7})
+        return runner
+
+    def test_csv_takes_union_of_keys_across_mixed_results(self, tmp_path):
+        runner = self._runner()
+        path = tmp_path / "mo.csv"
+        runner.save_results(path, format="csv")
+        with open(path, newline="") as f:
+            rows = list(csv.DictReader(f))
+        assert [r["function"] for r in rows] == ["zdt1", "dtlz2"]
+        assert rows[0]["status"] == "budget_exhausted"
+        assert rows[1]["status"] == "exception"
+        assert rows[1]["igd"] == ""  # key absent from the failed run
+
+    def test_json_round_trips(self, tmp_path):
+        runner = self._runner()
+        path = tmp_path / "mo.json"
+        runner.save_results(path, format="json")
+        with open(path) as f:
+            loaded = json.load(f)
+        assert loaded[0]["n_evals"] == 20
+        assert loaded[1]["error_message"] == "boom"
+
+    def test_unknown_format_raises(self, tmp_path):
+        with pytest.raises(ValueError):
+            self._runner().save_results(tmp_path / "x", format="xml")
+
+    def test_summary_stats_cover_successful_runs_only(self):
+        stats = self._runner().get_summary_stats()
+        assert stats["n_results"] == 2
+        assert stats["n_successful"] == 1
+        assert stats["success_rate"] == 0.5
+        assert stats["n_evals_mean"] == 20.0
+        assert stats["n_budget_exhausted"] == 1
+        assert stats["igd_min"] == stats["igd_max"] == stats["igd_mean"]
+        assert "hypervolume_mean" not in stats
+
+    def test_summary_stats_with_no_results(self):
+        stats = MOBenchmarkRunner(random_search_mo, verbose=False).get_summary_stats()
+        assert stats == {"n_results": 0, "n_successful": 0}

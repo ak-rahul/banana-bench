@@ -51,6 +51,37 @@ _VERIFY_RTOL = 1e-9
 _VERIFY_ATOL = 1e-12
 
 
+def _write_results(results: List[Dict[str, Any]], filepath: Path, format: str) -> None:
+    """Write runner results as CSV or JSON (shared by both runners' ``save_results``)."""
+    if format == "csv":
+        with open(filepath, "w", newline="") as f:
+            if results:
+                # A run mixing successes and failures produces heterogeneous result
+                # dicts (run_single's exception/bounds_error/invalid_result branches
+                # return fewer keys than a successful run's), so fieldnames must be
+                # the union across every result, not just the first one's keys --
+                # DictWriter raises ValueError on any row with a key outside
+                # fieldnames, and a fieldnames list based on a single result can't
+                # anticipate keys introduced only by a different result's status.
+                # Traces (record_trace=True) are nested arrays and don't fit a CSV
+                # cell; they're kept in the JSON output only.
+                fieldnames: List[str] = []
+                seen = {"trace"}
+                for result in results:
+                    for key in result:
+                        if key not in seen:
+                            seen.add(key)
+                            fieldnames.append(key)
+                writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+                writer.writeheader()
+                writer.writerows(results)
+    elif format == "json":
+        with open(filepath, "w") as f:
+            json.dump(results, f, indent=2)
+    else:
+        raise ValueError(f"Unknown format: {format}. Use 'csv' or 'json'")
+
+
 def _resolve_budget(max_evals: Optional[Budget], dim: int) -> Optional[int]:
     """Turn a ``max_evals`` setting into a concrete evaluation count for ``dim``."""
     if max_evals is None:
@@ -549,35 +580,7 @@ class BenchmarkRunner:
             Output format ('csv' or 'json')
         """
         filepath = Path(filepath)
-
-        if format == "csv":
-            with open(filepath, "w", newline="") as f:
-                if self.results:
-                    # A run mixing successes and failures produces heterogeneous result
-                    # dicts (run_single's exception/bounds_error/invalid_result branches
-                    # return fewer keys than a successful run's), so fieldnames must be
-                    # the union across every result, not just the first one's keys --
-                    # DictWriter raises ValueError on any row with a key outside
-                    # fieldnames, and a fieldnames list based on a single result can't
-                    # anticipate keys introduced only by a different result's status.
-                    # Traces (record_trace=True) are nested arrays and don't fit a CSV
-                    # cell; they're kept in the JSON output only.
-                    fieldnames: List[str] = []
-                    seen = {"trace"}
-                    for result in self.results:
-                        for key in result:
-                            if key not in seen:
-                                seen.add(key)
-                                fieldnames.append(key)
-                    writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-                    writer.writeheader()
-                    writer.writerows(self.results)
-        elif format == "json":
-            with open(filepath, "w") as f:
-                json.dump(self.results, f, indent=2)
-        else:
-            raise ValueError(f"Unknown format: {format}. Use 'csv' or 'json'")
-
+        _write_results(self.results, filepath, format)
         if self.verbose:
             print(f"\nResults saved to: {filepath}")
 
@@ -868,6 +871,61 @@ class MOBenchmarkRunner:
             print("=" * 82)
 
         return all_results
+
+    def save_results(self, filepath: Union[str, Path], format: str = "csv"):
+        """
+        Save results to file, in the same formats as ``BenchmarkRunner.save_results``.
+
+        Parameters
+        ----------
+        filepath : str or Path
+            Output file path
+        format : str, default='csv'
+            Output format ('csv' or 'json')
+        """
+        filepath = Path(filepath)
+        _write_results(self.results, filepath, format)
+        if self.verbose:
+            print(f"\nResults saved to: {filepath}")
+
+    def get_summary_stats(self) -> Dict[str, Any]:
+        """
+        Get summary statistics across every result so far.
+
+        Hypervolume is left out: each problem uses its own reference point, so
+        hypervolumes from different problems aren't on a common scale and their mean
+        means nothing. Compare it per problem from ``results`` instead.
+
+        Returns
+        -------
+        dict
+            Summary statistics (IGD, time and evaluation counts over successful runs).
+        """
+        successful = [r for r in self.results if r.get("success", False)]
+
+        if not successful:
+            return {"n_results": len(self.results), "n_successful": 0}
+
+        igds = [r["igd"] for r in successful]
+        times = [r["time"] for r in successful]
+
+        return {
+            "algorithm": self.algorithm_name,
+            "n_results": len(self.results),
+            "n_successful": len(successful),
+            "success_rate": len(successful) / len(self.results),
+            "igd_mean": float(np.mean(igds)),
+            "igd_median": float(np.median(igds)),
+            "igd_std": float(np.std(igds)),
+            "igd_min": float(np.min(igds)),
+            "igd_max": float(np.max(igds)),
+            "time_total": float(np.sum(times)),
+            "time_mean": float(np.mean(times)),
+            "n_evals_mean": float(np.mean([r["n_evals"] for r in successful])),
+            "n_budget_exhausted": sum(
+                1 for r in successful if r.get("status") == "budget_exhausted"
+            ),
+        }
 
 
 def quick_benchmark(

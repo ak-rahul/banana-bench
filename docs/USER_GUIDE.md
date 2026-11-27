@@ -444,6 +444,10 @@ is better, 0.0 means every reference point was reached exactly), `hypervolume`, 
 `status='exception'`, `success=False`, and `error_message` -- one failing function doesn't abort
 the rest of the suite, so you don't need to wrap `run_suite()` in your own `try`/`except`.
 
+As with `BenchmarkRunner`, `runner.save_results('mo_results.csv')` (or `format='json'`) saves
+every result, and `runner.get_summary_stats()` summarizes IGD, time and evaluations over the
+successful runs.
+
 ### Many-Objective Problems (DTLZ)
 
 DTLZ problems take the number of objectives as a parameter. Set it on the runner. ZDT problems stay

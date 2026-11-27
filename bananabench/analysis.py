@@ -44,17 +44,15 @@ References
 License: MIT
 """
 
+import importlib.util
 from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
-try:
-    from scipy import stats as _scipy_stats
-
-    SCIPY_AVAILABLE = True
-except ImportError:  # pragma: no cover - exercised via monkeypatch in tests
-    _scipy_stats = None
-    SCIPY_AVAILABLE = False
+# Checked without importing: scipy.stats takes ~1.5 s to import, and `import bananabench`
+# loads this module, so an eager import slowed every import and CLI call. Only
+# statistical_comparison needs it, and it imports scipy.stats on first use.
+SCIPY_AVAILABLE = importlib.util.find_spec("scipy") is not None
 
 if TYPE_CHECKING:  # pragma: no cover
     from .benchmarking import BenchmarkRunner
@@ -590,6 +588,8 @@ def statistical_comparison(
         If fewer than two runners are given or they share no function.
     """
     _check_scipy()
+    from scipy import stats as _scipy_stats
+
     if len(runners) < 2:
         raise ValueError("statistical_comparison needs at least 2 runners.")
     names = [r.algorithm_name for r in runners]
