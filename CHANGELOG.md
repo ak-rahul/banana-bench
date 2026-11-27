@@ -163,6 +163,16 @@ functionality from that history carries forward unchanged.
 - CI runs on pushes to `main`, on pull requests, and manually, instead of on
   every push to every branch. A pull request branch previously ran everything
   twice, once for the push and once for the pull request.
+- CI logic moved out of the workflow files. The changed-files classification
+  and the release version check were inline shell and Python in the YAML, and
+  nothing linted or tested them. They're now `scripts/dev.py ci-changes` and
+  `scripts/dev.py release-check`, with unit tests in
+  `tests/test_dev_script.py`, so `scripts/` changes now run the tests too. A
+  local composite action (`.github/actions/setup-python-env`) replaces the
+  Python setup and install steps the five jobs each repeated.
+- The release workflow only releases from `main`. Its manual "Run workflow"
+  trigger accepted any branch, so running it on a feature branch with an
+  untagged version would have published that branch to PyPI.
 
 ### Removed
 - Python 3.10 support. `requires-python` is now `>=3.11`. Python 3.10 reached

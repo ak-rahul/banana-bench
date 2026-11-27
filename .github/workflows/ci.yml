@@ -38,49 +38,14 @@ jobs:
 
     - name: 🗂️ Classify changed files
       id: filter
+      # Logic lives in scripts/dev.py (ci_changes), where it's linted and unit-tested.
       env:
         EVENT: ${{ github.event_name }}
-        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        PR_BASE: ${{ github.event.pull_request.base.sha }}
         BEFORE: ${{ github.event.before }}
-      run: |
-        all_true() {
-          echo "tests=true" >> "$GITHUB_OUTPUT"
-          echo "quality=true" >> "$GITHUB_OUTPUT"
-          exit 0
-        }
-
-        if [ "$EVENT" = "pull_request" ]; then
-          base="$BASE_SHA"
-        elif [ "$EVENT" = "push" ] && [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
-          base="$BEFORE"
-        else
-          echo "Manual run or new branch: running everything."
-          all_true
-        fi
-
-        if ! changed="$(git diff --name-only "$base" "$GITHUB_SHA")"; then
-          echo "Could not diff against $base (e.g. after a force-push): running everything."
-          all_true
-        fi
-        echo "Changed files:"; echo "$changed"
-
-        # Paths that can't affect the package, its tests, or the lint/type checks.
-        # fnmatch's "*" also matches "/", so "*.md" covers Markdown anywhere.
-        # scripts/ is linted, so it counts for quality but not for tests.
-        printf '%s\n' "$changed" | python3 -c '
-        import fnmatch, os, sys
-        docs_only = ["docs/*", "*.md", "examples/*", "justfile", "CITATION.cff",
-                     ".readthedocs.yaml", ".github/dependabot.yml",
-                     ".github/workflows/publish.yml"]
-        not_for_tests = docs_only + ["scripts/*"]
-        files = [f for f in sys.stdin.read().splitlines() if f]
-        def needed(ignored):
-            return any(not any(fnmatch.fnmatch(f, p) for p in ignored) for f in files)
-        with open(os.environ["GITHUB_OUTPUT"], "a") as out:
-            out.write(f"tests={str(needed(not_for_tests)).lower()}\n")
-            out.write(f"quality={str(needed(docs_only)).lower()}\n")
-        '
-        cat "$GITHUB_OUTPUT"
+      run: >
+        python3 scripts/dev.py ci-changes
+        --event "$EVENT" --pr-base "$PR_BASE" --before "$BEFORE" --head "$GITHUB_SHA"
 
   quality:
     name: 🔍 Lint, format & type check
@@ -91,16 +56,10 @@ jobs:
     - name: 📥 Checkout repository
       uses: actions/checkout@v7
 
-    - name: 🐍 Set up Python 3.12
-      uses: actions/setup-python@v7
+    - name: 🧰 Set up Python 3.12 and dependencies
+      uses: ./.github/actions/setup-python-env
       with:
-        python-version: '3.12'
-        cache: 'pip'
-
-    - name: 📦 Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install ".[dev]"
+        install: .[dev]
 
     - name: 🧹 Lint (ruff)
       run: ruff check bananabench tests scripts
@@ -126,16 +85,10 @@ jobs:
     - name: 📥 Checkout repository
       uses: actions/checkout@v7
 
-    - name: 🐍 Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v7
+    - name: 🧰 Set up Python ${{ matrix.python-version }} and dependencies
+      uses: ./.github/actions/setup-python-env
       with:
         python-version: ${{ matrix.python-version }}
-        cache: 'pip'
-
-    - name: 📦 Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev]"
 
     - name: 🧪 Run test suite with coverage
       run: |

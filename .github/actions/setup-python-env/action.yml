@@ -1,0 +1,32 @@
+name: Set up Python environment
+description: >
+  Set up Python with pip caching and install packages: the setup every
+  banana-bench job shares. The repository must be checked out first.
+
+inputs:
+  python-version:
+    description: Python version to set up.
+    default: '3.12'
+  install:
+    description: >
+      Arguments for `pip install`, e.g. "-e .[dev]" or "build twine".
+      Globbing is off, so ".[dev]" needs no quoting.
+    default: '-e .[dev]'
+
+runs:
+  using: composite
+  steps:
+    - name: 🐍 Set up Python ${{ inputs.python-version }}
+      uses: actions/setup-python@v7
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: pip
+
+    - name: 📦 Install ${{ inputs.install }}
+      shell: bash
+      env:
+        INSTALL: ${{ inputs.install }}
+      run: |
+        set -f  # no globbing: ".[dev]" must reach pip as written
+        python -m pip install --upgrade pip
+        python -m pip install $INSTALL
